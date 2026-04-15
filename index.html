@@ -3568,17 +3568,16 @@ function wakeUp(){
   },440);
 }
 
-// ══ SYNC ENGINE — Firebase Realtime Database ═══════════
-// Free REST API, no SDK, perfect CORS, no signup needed
-// Using a shared Oyekan app Firebase project
-const FB_BASE = 'https://oyekan-family-app-default-rtdb.firebaseio.com/families';
+// ══ SYNC ENGINE — Pantry Cloud Storage ══════════════════
+// getpantry.cloud — free, no signup, full CORS, works from any origin
+const PANTRY_BASE = 'https://getpantry.cloud/apiv1/pantry';
 
 // SHARED = all family | PERSONAL = this device only
 const SHARED_KEYS   = ['cal','grocery','meals','chores','finances','budgets','savings','debts','subs','misc','recurring'];
 const PERSONAL_KEYS = ['schedule','notes','shopping'];
 
 function getSyncCode(){ return localStorage.getItem('oyekan_sync_code')||''; }
-function getSyncKey(){  return localStorage.getItem('oyekan_sync_key')||''; }  // Firebase node key
+function getBinId(){    return localStorage.getItem('oyekan_bin_id')||''; }
 function getApiKey(){   return localStorage.getItem('oyekan_api_key')||''; }
 
 // ── API Key (for AI features) ─────────────────────────
@@ -3605,62 +3604,63 @@ function anthropicHeaders(){
 // ── Sync code generation ──────────────────────────────
 function generateSyncCode(){
   const words=['OAK','ELM','SKY','SUN','BAY','RVR','SEA','NOVA','MOON','STAR'];
-  const nums=Math.floor(1000+Math.random()*9000);
-  return words[Math.floor(Math.random()*words.length)]+'-'+nums;
+  return words[Math.floor(Math.random()*words.length)]+'-'+Math.floor(1000+Math.random()*9000);
 }
 
-// ── Firebase REST helpers ─────────────────────────────
-async function fbFetch(url, opts={}){
-  const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout')),10000));
-  return Promise.race([fetch(url+'.json',opts), timeout]);
+// ── Pantry REST helpers ───────────────────────────────
+function ptFetch(url,opts={}){
+  const timeout=new Promise((_,r)=>setTimeout(()=>r(new Error('Timeout')),10000));
+  return Promise.race([fetch(url,opts),timeout]);
 }
 
-async function createFbNode(data){
+// Create new pantry — returns pantryId
+async function createBin(data){
   try{
-    const res=await fbFetch(FB_BASE,{
+    // Pantry create endpoint — returns a new pantryId with no auth needed
+    const res=await ptFetch('https://getpantry.cloud/apiv1/pantry/create',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({shared:data,updatedAt:new Date().toISOString()})
+      body:JSON.stringify({name:'Oyekan Family',description:'Family Planner sync'})
     });
-    if(!res.ok)throw new Error('HTTP '+res.status);
+    if(!res.ok)throw new Error('Create failed: HTTP '+res.status);
     const json=await res.json();
-    return json?.name||null; // Firebase POST returns {"name":"<key>"}
+    const pantryId=json.pantryID;
+    if(!pantryId)throw new Error('No pantry ID in response');
+    // Write initial shared data into a basket called "family"
+    await writeBin(pantryId,data);
+    return pantryId;
   }catch(e){
-    console.error('createFbNode:',e.message);
+    console.error('createBin:',e.message);
     return null;
   }
 }
 
-async function readFbNode(key){
+// Read family basket
+async function readBin(pantryId){
   try{
-    const res=await fbFetch(FB_BASE+'/'+key);
+    const res=await ptFetch(PANTRY_BASE+'/'+pantryId+'/basket/family');
     if(!res.ok)return null;
     return await res.json();
   }catch(e){
-    console.error('readFbNode:',e.message);
+    console.error('readBin:',e.message);
     return null;
   }
 }
 
-async function writeFbNode(key,data){
+// Write to family basket
+async function writeBin(pantryId,data){
   try{
-    const res=await fbFetch(FB_BASE+'/'+key,{
-      method:'PUT',
+    const res=await ptFetch(PANTRY_BASE+'/'+pantryId+'/basket/family',{
+      method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({shared:data,updatedAt:new Date().toISOString()})
     });
     return res.ok;
   }catch(e){
-    console.error('writeFbNode:',e.message);
+    console.error('writeBin:',e.message);
     return false;
   }
 }
-
-// Keep old names so rest of code works unchanged
-const createBin  = createFbNode;
-const readBin    = readFbNode;
-const writeBin   = writeFbNode;
-function getBinId(){ return getSyncKey(); }
 
 // ── Data helpers ──────────────────────────────────────
 function getSharedData(){
@@ -3688,7 +3688,7 @@ function updateSyncCodeDisplay(){
   if(el)el.textContent=code||'—';
   if(!code){
     updateSyncStatus('⚙️ Setting up sync...','var(--muted)');
-  }else if(!getSyncKey()){
+  }else if(!getBinId()){
     updateSyncStatus('⏳ Connecting...','var(--amber)');
   }else{
     updateSyncStatus('✅ Sync active · last: '+(localStorage.getItem('oyekan_last_pull')||'never'),'var(--green)');
@@ -3714,12 +3714,12 @@ function isLiveContext(){
 
 async function syncNow(pull=true){
   if(!isLiveContext())return;
-  const key=getSyncKey();
-  if(!key){updateSyncStatus('⚠️ Sync not set up yet','var(--amber)');return;}
+  const binId=getBinId();
+  if(!binId){updateSyncStatus('⚠️ Sync not set up yet','var(--amber)');return;}
   if(!navigator.onLine){updateSyncStatus('⚠️ No internet','var(--amber)');return;}
   updateSyncStatus(pull?'↓ Pulling...':'↑ Pushing...','var(--teal)');
   if(pull){
-    const data=await readFbNode(key);
+    const data=await readBin(binId);
     if(data?.shared){
       applySharedData(data.shared);
       reRenderAll();
@@ -3730,7 +3730,7 @@ async function syncNow(pull=true){
       updateSyncStatus('⚠️ Could not reach server','var(--amber)');
     }
   }else{
-    const ok=await writeFbNode(key,getSharedData());
+    const ok=await writeBin(binId,getSharedData());
     const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
     updateSyncStatus(ok?'✅ Pushed · '+t:'⚠️ Push failed','var(--green)');
     if(ok)toast('Family data saved ☁️','✅');
@@ -3744,18 +3744,18 @@ async function joinSyncCode(){
   if(!navigator.onLine){toast('No internet connection','⚠️');return;}
   if(!isLiveContext()){toast('Open the GitHub link to use sync','⚠️');return;}
   updateSyncStatus('🔍 Looking up family...','var(--teal)');
-  // Code format: WORD-NNNN-FBKEY
+  // Code format: WORD-NNNN-PANTRYID
   const parts=raw.split('-');
   if(parts.length<3){
     updateSyncStatus('⚠️ Invalid code — ask family for the full code','var(--red)');
     return;
   }
-  const fbKey=parts.slice(2).join('-');
+  const pantryId=parts.slice(2).join('-');
   const shortCode=parts.slice(0,2).join('-');
-  const data=await readFbNode(fbKey);
+  const data=await readBin(pantryId);
   if(data?.shared){
-    localStorage.setItem('oyekan_sync_key',fbKey);
-    localStorage.setItem('oyekan_sync_code',shortCode+'-'+fbKey);
+    localStorage.setItem('oyekan_bin_id',pantryId);
+    localStorage.setItem('oyekan_sync_code',shortCode+'-'+pantryId);
     applySharedData(data.shared);
     reRenderAll();
     updateSyncCodeDisplay();
@@ -3774,7 +3774,7 @@ let _pollInterval=null;
 function startSyncPolling(){
   if(_pollInterval)clearInterval(_pollInterval);
   _pollInterval=setInterval(()=>{
-    if(getSyncKey()&&navigator.onLine&&isLiveContext())syncNow(true);
+    if(getBinId()&&navigator.onLine&&isLiveContext())syncNow(true);
   },30000);
 }
 
@@ -3784,8 +3784,8 @@ function scheduleSyncPush(){
   if(!isLiveContext())return;
   if(_syncPushTimer)clearTimeout(_syncPushTimer);
   _syncPushTimer=setTimeout(()=>{
-    const key=getSyncKey();
-    if(key&&navigator.onLine)writeFbNode(key,getSharedData());
+    const binId=getBinId();
+    if(binId&&navigator.onLine)writeBin(binId,getSharedData());
   },4000);
 }
 
@@ -3810,19 +3810,19 @@ async function initSync(){
     updateSyncStatus('⚠️ Offline — sync will start when connected','var(--amber)');
     return;
   }
-  const existingKey=getSyncKey();
-  if(existingKey){
+  const existingId=getBinId();
+  if(existingId){
     await syncNow(true);
     startSyncPolling();
     return;
   }
-  // First time — create a new Firebase node
+  // First time — create a new Pantry
   updateSyncStatus('⚙️ Creating family sync...','var(--teal)');
-  const fbKey=await createFbNode(getSharedData());
-  if(fbKey){
+  const pantryId=await createBin(getSharedData());
+  if(pantryId){
     const shortCode=generateSyncCode();
-    const fullCode=shortCode+'-'+fbKey;
-    localStorage.setItem('oyekan_sync_key',fbKey);
+    const fullCode=shortCode+'-'+pantryId;
+    localStorage.setItem('oyekan_bin_id',pantryId);
     localStorage.setItem('oyekan_sync_code',fullCode);
     updateSyncCodeDisplay();
     updateSyncStatus('✅ Sync ready! Share your code with family','var(--green)');
@@ -3832,8 +3832,6 @@ async function initSync(){
     updateSyncStatus('⚠️ Could not create sync — check connection & reload','var(--red)');
   }
 }
-
-// SHARED = everyone sees & edits | PERSONAL = stays on your device
 function autoResetChores(){
   const todayStr=today.toISOString().split('T')[0];
   if(localStorage.getItem('oyekan_chore_reset')===todayStr)return;
