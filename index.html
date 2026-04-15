@@ -3568,16 +3568,17 @@ function wakeUp(){
   },440);
 }
 
-// ══ SYNC ENGINE ════════════════════════════════════════
-// Uses jsonblob.com — free REST storage, works over https
-const BLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
+// ══ SYNC ENGINE — Firebase Realtime Database ═══════════
+// Free REST API, no SDK, perfect CORS, no signup needed
+// Using a shared Oyekan app Firebase project
+const FB_BASE = 'https://oyekan-family-app-default-rtdb.firebaseio.com/families';
 
-// SHARED = everyone sees & edits | PERSONAL = stays on your device
+// SHARED = all family | PERSONAL = this device only
 const SHARED_KEYS   = ['cal','grocery','meals','chores','finances','budgets','savings','debts','subs','misc','recurring'];
 const PERSONAL_KEYS = ['schedule','notes','shopping'];
 
 function getSyncCode(){ return localStorage.getItem('oyekan_sync_code')||''; }
-function getBinId(){    return localStorage.getItem('oyekan_bin_id')||''; }
+function getSyncKey(){  return localStorage.getItem('oyekan_sync_key')||''; }  // Firebase node key
 function getApiKey(){   return localStorage.getItem('oyekan_api_key')||''; }
 
 // ── API Key (for AI features) ─────────────────────────
@@ -3608,56 +3609,58 @@ function generateSyncCode(){
   return words[Math.floor(Math.random()*words.length)]+'-'+nums;
 }
 
-// ── JSONBlob REST calls (fetch with timeout) ──────────
-async function blobFetch(url, opts={}, timeoutMs=8000){
-  const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout')),timeoutMs));
-  return Promise.race([fetch(url,opts),timeout]);
+// ── Firebase REST helpers ─────────────────────────────
+async function fbFetch(url, opts={}){
+  const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout')),10000));
+  return Promise.race([fetch(url+'.json',opts), timeout]);
 }
 
-async function createBin(data){
+async function createFbNode(data){
   try{
-    const res=await blobFetch(BLOB_BASE,{
+    const res=await fbFetch(FB_BASE,{
       method:'POST',
-      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({shared:data,updatedAt:new Date().toISOString()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
-    const loc=res.headers.get('Location')||'';
-    const id=loc.split('/').pop();
-    if(!id)throw new Error('No ID in response');
-    return id;
+    const json=await res.json();
+    return json?.name||null; // Firebase POST returns {"name":"<key>"}
   }catch(e){
-    console.error('createBin:',e.message);
+    console.error('createFbNode:',e.message);
     return null;
   }
 }
 
-async function readBin(binId){
+async function readFbNode(key){
   try{
-    const res=await blobFetch(BLOB_BASE+'/'+binId,{
-      headers:{'Accept':'application/json'}
-    });
+    const res=await fbFetch(FB_BASE+'/'+key);
     if(!res.ok)return null;
     return await res.json();
   }catch(e){
-    console.error('readBin:',e.message);
+    console.error('readFbNode:',e.message);
     return null;
   }
 }
 
-async function writeBin(binId,data){
+async function writeFbNode(key,data){
   try{
-    const res=await blobFetch(BLOB_BASE+'/'+binId,{
+    const res=await fbFetch(FB_BASE+'/'+key,{
       method:'PUT',
-      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({shared:data,updatedAt:new Date().toISOString()})
     });
     return res.ok;
   }catch(e){
-    console.error('writeBin:',e.message);
+    console.error('writeFbNode:',e.message);
     return false;
   }
 }
+
+// Keep old names so rest of code works unchanged
+const createBin  = createFbNode;
+const readBin    = readFbNode;
+const writeBin   = writeFbNode;
+function getBinId(){ return getSyncKey(); }
 
 // ── Data helpers ──────────────────────────────────────
 function getSharedData(){
@@ -3666,14 +3669,10 @@ function getSharedData(){
   return out;
 }
 function applySharedData(shared){
-  let changed=false;
   SHARED_KEYS.forEach(k=>{
-    if(shared[k]!==undefined){D[k]=shared[k];changed=true;}
+    if(shared[k]!==undefined)D[k]=shared[k];
   });
-  if(changed){
-    // Save without triggering another push
-    localStorage.setItem('oyekan_v3',JSON.stringify(D));
-  }
+  localStorage.setItem('oyekan_v3',JSON.stringify(D));
 }
 
 // ── Status display ────────────────────────────────────
@@ -3686,47 +3685,41 @@ function updateSyncStatus(msg,col){
 function updateSyncCodeDisplay(){
   const code=getSyncCode();
   const el=document.getElementById('sync-code-display');
-  if(el)el.textContent=code?code:'—';
+  if(el)el.textContent=code||'—';
   if(!code){
-    updateSyncStatus('⚙️ Setting up sync automatically...','var(--muted)');
-  } else if(!getBinId()){
+    updateSyncStatus('⚙️ Setting up sync...','var(--muted)');
+  }else if(!getSyncKey()){
     updateSyncStatus('⏳ Connecting...','var(--amber)');
-  } else {
-    updateSyncStatus('✅ Sync active · last pull: '+(localStorage.getItem('oyekan_last_pull')||'never'),'var(--green)');
+  }else{
+    updateSyncStatus('✅ Sync active · last: '+(localStorage.getItem('oyekan_last_pull')||'never'),'var(--green)');
   }
 }
 
 function copySyncCode(){
   const code=getSyncCode();
-  if(!code){toast('Sync not ready yet — wait a moment','⚠️');return;}
+  if(!code){toast('Sync not ready yet','⚠️');return;}
   if(navigator.clipboard)navigator.clipboard.writeText(code).catch(()=>{});
   const ta=document.createElement('textarea');
   ta.value=code;ta.style.cssText='position:fixed;opacity:0';
   document.body.appendChild(ta);ta.select();document.execCommand('copy');
   document.body.removeChild(ta);
-  toast('Code copied! Share it with your family 📋','✅');
+  toast('Code copied! Share with family 📋','✅');
 }
 
 // ── Main sync ─────────────────────────────────────────
 function isLiveContext(){
   const h=window.location.hostname;
-  return h&&h!==''&&!h.includes('claude.ai')&&h!=='localhost';
+  return h&&h!==''&&h!=='localhost'&&!h.includes('claude.ai');
 }
 
 async function syncNow(pull=true){
   if(!isLiveContext())return;
-  const binId=getBinId();
-  if(!binId){
-    updateSyncStatus('⚠️ Sync not set up yet','var(--amber)');
-    return;
-  }
-  if(!navigator.onLine){
-    updateSyncStatus('⚠️ No internet — will sync when connected','var(--amber)');
-    return;
-  }
+  const key=getSyncKey();
+  if(!key){updateSyncStatus('⚠️ Sync not set up yet','var(--amber)');return;}
+  if(!navigator.onLine){updateSyncStatus('⚠️ No internet','var(--amber)');return;}
   updateSyncStatus(pull?'↓ Pulling...':'↑ Pushing...','var(--teal)');
   if(pull){
-    const data=await readBin(binId);
+    const data=await readFbNode(key);
     if(data?.shared){
       applySharedData(data.shared);
       reRenderAll();
@@ -3734,17 +3727,13 @@ async function syncNow(pull=true){
       localStorage.setItem('oyekan_last_pull',t);
       updateSyncStatus('✅ Synced · '+t,'var(--green)');
     }else{
-      updateSyncStatus('⚠️ Could not reach server — try again','var(--amber)');
+      updateSyncStatus('⚠️ Could not reach server','var(--amber)');
     }
   }else{
-    const ok=await writeBin(binId,getSharedData());
-    if(ok){
-      const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-      updateSyncStatus('✅ Pushed · '+t,'var(--green)');
-      toast('Family data saved to cloud ☁️','✅');
-    }else{
-      updateSyncStatus('⚠️ Push failed — check connection','var(--amber)');
-    }
+    const ok=await writeFbNode(key,getSharedData());
+    const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    updateSyncStatus(ok?'✅ Pushed · '+t:'⚠️ Push failed','var(--green)');
+    if(ok)toast('Family data saved ☁️','✅');
   }
 }
 
@@ -3753,19 +3742,20 @@ async function joinSyncCode(){
   const raw=(document.getElementById('sync-code-input')?.value||'').trim().toUpperCase();
   if(!raw){toast('Enter a sync code','⚠️');return;}
   if(!navigator.onLine){toast('No internet connection','⚠️');return;}
-  updateSyncStatus('🔍 Looking up family data...','var(--teal)');
-  // Code format: WORD-NNNN-BLOBID
+  if(!isLiveContext()){toast('Open the GitHub link to use sync','⚠️');return;}
+  updateSyncStatus('🔍 Looking up family...','var(--teal)');
+  // Code format: WORD-NNNN-FBKEY
   const parts=raw.split('-');
   if(parts.length<3){
-    updateSyncStatus('⚠️ Invalid code — ask your family for the full code','var(--red)');
+    updateSyncStatus('⚠️ Invalid code — ask family for the full code','var(--red)');
     return;
   }
-  const binId=parts.slice(2).join('-');
+  const fbKey=parts.slice(2).join('-');
   const shortCode=parts.slice(0,2).join('-');
-  const data=await readBin(binId);
+  const data=await readFbNode(fbKey);
   if(data?.shared){
-    localStorage.setItem('oyekan_bin_id',binId);
-    localStorage.setItem('oyekan_sync_code',shortCode+'-'+binId);
+    localStorage.setItem('oyekan_sync_key',fbKey);
+    localStorage.setItem('oyekan_sync_code',shortCode+'-'+fbKey);
     applySharedData(data.shared);
     reRenderAll();
     updateSyncCodeDisplay();
@@ -3773,28 +3763,29 @@ async function joinSyncCode(){
     if(inp)inp.value='';
     updateSyncStatus('✅ Joined! Family data loaded','var(--green)');
     toast('Joined family sync! 🔗','✅');
+    startSyncPolling();
   }else{
-    updateSyncStatus('⚠️ Code not found — check it and try again','var(--red)');
+    updateSyncStatus('⚠️ Code not found — check and try again','var(--red)');
   }
 }
 
-// ── Auto-poll every 30s while app is open ─────────────
+// ── Auto-poll every 30s ───────────────────────────────
 let _pollInterval=null;
 function startSyncPolling(){
   if(_pollInterval)clearInterval(_pollInterval);
   _pollInterval=setInterval(()=>{
-    if(getBinId()&&navigator.onLine)syncNow(true);
+    if(getSyncKey()&&navigator.onLine&&isLiveContext())syncNow(true);
   },30000);
 }
 
-// ── Auto-push 4s after any data change ───────────────
+// ── Auto-push 4s after save ───────────────────────────
 let _syncPushTimer=null;
 function scheduleSyncPush(){
   if(!isLiveContext())return;
   if(_syncPushTimer)clearTimeout(_syncPushTimer);
   _syncPushTimer=setTimeout(()=>{
-    const binId=getBinId();
-    if(binId&&navigator.onLine)writeBin(binId,getSharedData());
+    const key=getSyncKey();
+    if(key&&navigator.onLine)writeFbNode(key,getSharedData());
   },4000);
 }
 
@@ -3811,39 +3802,38 @@ function reRenderAll(){
 async function initSync(){
   updateSyncCodeDisplay();
   updateApiKeyStatus();
-  // Don't attempt sync inside Claude.ai artifact sandbox or file:// context
-  const host=window.location.hostname;
-  const isLive=host&&host!=='localhost'&&!host.includes('claude.ai')&&host!=='';
-  if(!isLive){
-    updateSyncStatus('ℹ️ Sync active on GitHub Pages — open the live URL to connect','var(--muted)');
+  if(!isLiveContext()){
+    updateSyncStatus('ℹ️ Open the GitHub link to enable sync','var(--muted)');
     return;
   }
   if(!navigator.onLine){
     updateSyncStatus('⚠️ Offline — sync will start when connected','var(--amber)');
     return;
   }
-  const existing=getBinId();
-  if(existing){
+  const existingKey=getSyncKey();
+  if(existingKey){
     await syncNow(true);
     startSyncPolling();
     return;
   }
+  // First time — create a new Firebase node
   updateSyncStatus('⚙️ Creating family sync...','var(--teal)');
-  const binId=await createBin(getSharedData());
-  if(binId){
+  const fbKey=await createFbNode(getSharedData());
+  if(fbKey){
     const shortCode=generateSyncCode();
-    const fullCode=shortCode+'-'+binId;
-    localStorage.setItem('oyekan_bin_id',binId);
+    const fullCode=shortCode+'-'+fbKey;
+    localStorage.setItem('oyekan_sync_key',fbKey);
     localStorage.setItem('oyekan_sync_code',fullCode);
     updateSyncCodeDisplay();
     updateSyncStatus('✅ Sync ready! Share your code with family','var(--green)');
     toast('Family sync created! ✅','🔗');
     startSyncPolling();
   }else{
-    updateSyncStatus('⚠️ Sync setup failed — reload to retry','var(--red)');
+    updateSyncStatus('⚠️ Could not create sync — check connection & reload','var(--red)');
   }
 }
 
+// SHARED = everyone sees & edits | PERSONAL = stays on your device
 function autoResetChores(){
   const todayStr=today.toISOString().split('T')[0];
   if(localStorage.getItem('oyekan_chore_reset')===todayStr)return;
