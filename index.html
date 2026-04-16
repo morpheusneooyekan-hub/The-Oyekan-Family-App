@@ -842,19 +842,33 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
   </div>
   <div class="settings-card" style="background:rgba(77,189,170,.04);border-color:rgba(77,189,170,.18)">
     <div class="settings-title" style="color:var(--teal)">🔗 Family Sync</div>
-    <div class="settings-sub">Share your Family Sync Code with family members so everyone sees the same shared data on any phone. Auto-created on first use — no sign-up needed.</div>
+    <div class="settings-sub">Create a sync code that only your family knows. Anyone who enters the same code shares the same data across all their phones.</div>
     <div id="sync-status" style="margin:10px 0;font-size:12px;color:var(--muted)">Loading...</div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <div id="sync-code-display" style="flex:1;padding:11px 13px;border-radius:11px;border:1px solid rgba(77,189,170,.3);background:rgba(77,189,170,.06);font-size:15px;font-weight:700;color:var(--teal);font-family:'Outfit',sans-serif;letter-spacing:3px;text-align:center"></div>
-      <button onclick="copySyncCode()" style="padding:11px 14px;border-radius:11px;background:rgba(77,189,170,.15);border:1px solid rgba(77,189,170,.25);color:var(--teal);font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif">Copy</button>
+
+    <!-- Active code display -->
+    <div id="sync-active-wrap" style="display:none;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Your Active Code</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="sync-code-display" style="flex:1;padding:11px 14px;border-radius:11px;border:1.5px solid rgba(77,189,170,.4);background:rgba(77,189,170,.06);font-size:17px;font-weight:700;color:var(--teal);font-family:'Outfit',sans-serif;letter-spacing:4px;text-align:center"></div>
+        <button onclick="copySyncCode()" style="padding:11px 14px;border-radius:11px;background:rgba(77,189,170,.15);border:1px solid rgba(77,189,170,.25);color:var(--teal);font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif">Copy</button>
+        <button onclick="clearSyncCode()" style="padding:11px 12px;border-radius:11px;background:rgba(224,84,112,.08);border:1px solid rgba(224,84,112,.2);color:var(--red);font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif">✕</button>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <input id="sync-code-input" type="text" placeholder="Enter family sync code..." maxlength="14" style="flex:1;padding:10px 13px;border-radius:11px;border:1px solid var(--border2);background:var(--glass);font-size:14px;color:var(--text);outline:none;font-family:'Outfit',sans-serif;caret-color:var(--teal);letter-spacing:2px;text-transform:uppercase">
-      <button onclick="joinSyncCode()" style="padding:10px 14px;border-radius:11px;background:rgba(77,189,170,.15);border:1px solid rgba(77,189,170,.25);color:var(--teal);font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif">Join</button>
+
+    <!-- Create / join -->
+    <div id="sync-setup-wrap">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Set a sync code</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="sync-code-input" type="text" placeholder="e.g. OYEKAN or FAMILY2024" maxlength="20" style="flex:1;padding:10px 13px;border-radius:11px;border:1px solid var(--border2);background:var(--glass);font-size:14px;color:var(--text);outline:none;font-family:'Outfit',sans-serif;caret-color:var(--teal);letter-spacing:2px;text-transform:uppercase" onkeydown="if(event.key==='Enter')activateSyncCode()">
+        <button onclick="activateSyncCode()" style="padding:10px 16px;border-radius:11px;background:var(--teal);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif">Activate</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.6">Choose anything memorable — this is your family's secret key. Everyone in the family enters the exact same code to share data.</div>
     </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="syncNow(true)" style="flex:1;padding:9px;border-radius:10px;background:var(--glass);border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif">↓ Pull from cloud</button>
-      <button onclick="syncNow(false)" style="flex:1;padding:9px;border-radius:10px;background:var(--glass);border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif">↑ Push to cloud</button>
+
+    <!-- Manual sync buttons -->
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="syncNow(true)" style="flex:1;padding:9px;border-radius:10px;background:var(--glass);border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif">↓ Pull latest</button>
+      <button onclick="syncNow(false)" style="flex:1;padding:9px;border-radius:10px;background:var(--glass);border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif">↑ Push now</button>
     </div>
   </div>
 
@@ -3568,29 +3582,28 @@ function wakeUp(){
   },440);
 }
 
-// ══ SYNC ENGINE — Pantry Cloud Storage ══════════════════
-// getpantry.cloud — free, no signup, full CORS, works from any origin
+// \u2550\u2550 SYNC ENGINE \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// getpantry.cloud \u2014 user chooses their own sync code
 const PANTRY_BASE = 'https://getpantry.cloud/apiv1/pantry';
+const PANTRY_ID   = 'a3f8c2e1-9b4d-4f7a-8e2c-1d5f6b3a9c7e';
 
-// SHARED = all family | PERSONAL = this device only
 const SHARED_KEYS   = ['cal','grocery','meals','chores','finances','budgets','savings','debts','subs','misc','recurring'];
 const PERSONAL_KEYS = ['schedule','notes','shopping'];
 
 function getSyncCode(){ return localStorage.getItem('oyekan_sync_code')||''; }
-function getBinId(){    return localStorage.getItem('oyekan_bin_id')||''; }
-function getApiKey(){   return localStorage.getItem('oyekan_api_key')||''; }
+function getBinId(){ return getSyncCode(); }
+function getApiKey(){ return localStorage.getItem('oyekan_api_key')||''; }
 
-// ── API Key (for AI features) ─────────────────────────
 function saveApiKey(){
   const val=(document.getElementById('api-key-input')?.value||'').trim();
   localStorage.setItem('oyekan_api_key',val);
   updateApiKeyStatus();
-  toast(val?'API key saved — AI features active':'API key cleared','🔑');
+  toast(val?'API key saved':'API key cleared','\uD83D\uDD11');
 }
 function updateApiKeyStatus(){
   const el=document.getElementById('api-key-status');
   const key=getApiKey();
-  if(el)el.textContent=key?'✅ Custom key active — AI features on your account':'Using built-in key (shared usage)';
+  if(el)el.textContent=key?'\u2705 Custom key active':'Using built-in key (shared usage)';
   const inp=document.getElementById('api-key-input');
   if(inp&&key)inp.value=key;
 }
@@ -3601,81 +3614,45 @@ function anthropicHeaders(){
   return h;
 }
 
-// ── Sync code generation ──────────────────────────────
-function generateSyncCode(){
-  const words=['OAK','ELM','SKY','SUN','BAY','RVR','SEA','NOVA','MOON','STAR'];
-  return words[Math.floor(Math.random()*words.length)]+'-'+Math.floor(1000+Math.random()*9000);
-}
-
-// ── Pantry REST helpers ───────────────────────────────
 function ptFetch(url,opts={}){
-  const timeout=new Promise((_,r)=>setTimeout(()=>r(new Error('Timeout')),10000));
-  return Promise.race([fetch(url,opts),timeout]);
+  return Promise.race([
+    fetch(url,opts),
+    new Promise((_,r)=>setTimeout(()=>r(new Error('Timeout')),10000))
+  ]);
 }
-
-// Create new pantry — returns pantryId
-async function createBin(data){
-  try{
-    // Pantry create endpoint — returns a new pantryId with no auth needed
-    const res=await ptFetch('https://getpantry.cloud/apiv1/pantry/create',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:'Oyekan Family',description:'Family Planner sync'})
-    });
-    if(!res.ok)throw new Error('Create failed: HTTP '+res.status);
-    const json=await res.json();
-    const pantryId=json.pantryID;
-    if(!pantryId)throw new Error('No pantry ID in response');
-    // Write initial shared data into a basket called "family"
-    await writeBin(pantryId,data);
-    return pantryId;
-  }catch(e){
-    console.error('createBin:',e.message);
-    return null;
-  }
+function basketUrl(code){
+  const safe=code.replace(/[^A-Z0-9]/g,'').substring(0,20);
+  return PANTRY_BASE+'/'+PANTRY_ID+'/basket/'+safe;
 }
-
-// Read family basket
-async function readBin(pantryId){
+async function readBin(code){
   try{
-    const res=await ptFetch(PANTRY_BASE+'/'+pantryId+'/basket/family');
-    if(!res.ok)return null;
+    const res=await ptFetch(basketUrl(code));
+    if(res.status===404)return null;
+    if(!res.ok)throw new Error('HTTP '+res.status);
     return await res.json();
-  }catch(e){
-    console.error('readBin:',e.message);
-    return null;
-  }
+  }catch(e){console.error('readBin:',e.message);return null;}
 }
-
-// Write to family basket
-async function writeBin(pantryId,data){
+async function writeBin(code,data){
   try{
-    const res=await ptFetch(PANTRY_BASE+'/'+pantryId+'/basket/family',{
+    const res=await ptFetch(basketUrl(code),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({shared:data,updatedAt:new Date().toISOString()})
     });
     return res.ok;
-  }catch(e){
-    console.error('writeBin:',e.message);
-    return false;
-  }
+  }catch(e){console.error('writeBin:',e.message);return false;}
 }
 
-// ── Data helpers ──────────────────────────────────────
 function getSharedData(){
   const out={};
   SHARED_KEYS.forEach(k=>{out[k]=D[k]||[];});
   return out;
 }
 function applySharedData(shared){
-  SHARED_KEYS.forEach(k=>{
-    if(shared[k]!==undefined)D[k]=shared[k];
-  });
+  SHARED_KEYS.forEach(k=>{if(shared[k]!==undefined)D[k]=shared[k];});
   localStorage.setItem('oyekan_v3',JSON.stringify(D));
 }
 
-// ── Status display ────────────────────────────────────
 function updateSyncStatus(msg,col){
   const el=document.getElementById('sync-status');
   if(!el)return;
@@ -3684,112 +3661,120 @@ function updateSyncStatus(msg,col){
 }
 function updateSyncCodeDisplay(){
   const code=getSyncCode();
-  const el=document.getElementById('sync-code-display');
-  if(el)el.textContent=code||'—';
-  if(!code){
-    updateSyncStatus('⚙️ Setting up sync...','var(--muted)');
-  }else if(!getBinId()){
-    updateSyncStatus('⏳ Connecting...','var(--amber)');
+  const aw=document.getElementById('sync-active-wrap');
+  const sw=document.getElementById('sync-setup-wrap');
+  const disp=document.getElementById('sync-code-display');
+  if(code){
+    if(aw)aw.style.display='block';
+    if(sw)sw.style.display='none';
+    if(disp)disp.textContent=code;
+    updateSyncStatus('\u2705 Active: "'+code+'" \u00B7 last sync: '+(localStorage.getItem('oyekan_last_pull')||'never'),'var(--green)');
   }else{
-    updateSyncStatus('✅ Sync active · last: '+(localStorage.getItem('oyekan_last_pull')||'never'),'var(--green)');
+    if(aw)aw.style.display='none';
+    if(sw)sw.style.display='block';
+    updateSyncStatus('No sync code set \u2014 create one below','var(--muted)');
   }
+}
+
+async function activateSyncCode(){
+  const raw=(document.getElementById('sync-code-input')?.value||'').trim().toUpperCase();
+  if(!raw){toast('Enter a sync code first','\u26A0\uFE0F');return;}
+  if(raw.length<3){toast('Code must be at least 3 characters','\u26A0\uFE0F');return;}
+  if(!isLiveContext()){toast('Open the GitHub link to use sync','\u26A0\uFE0F');return;}
+  if(!navigator.onLine){toast('No internet connection','\u26A0\uFE0F');return;}
+  updateSyncStatus('Connecting to "'+raw+'"...','var(--teal)');
+  const existing=await readBin(raw);
+  if(existing?.shared){
+    localStorage.setItem('oyekan_sync_code',raw);
+    applySharedData(existing.shared);
+    reRenderAll();
+    updateSyncCodeDisplay();
+    document.getElementById('sync-code-input').value='';
+    toast('Joined "'+raw+'"! Family data loaded','\u2705');
+    startSyncPolling();
+  }else{
+    const ok=await writeBin(raw,getSharedData());
+    if(ok){
+      localStorage.setItem('oyekan_sync_code',raw);
+      updateSyncCodeDisplay();
+      document.getElementById('sync-code-input').value='';
+      toast('"'+raw+'" created! Share with family','\u2705');
+      startSyncPolling();
+    }else{
+      updateSyncStatus('\u26A0\uFE0F Could not activate \u2014 check connection & reload','var(--red)');
+    }
+  }
+}
+
+function clearSyncCode(){
+  askDelete('sync code (your data stays safe)',()=>{
+    localStorage.removeItem('oyekan_sync_code');
+    localStorage.removeItem('oyekan_last_pull');
+    if(_pollInterval){clearInterval(_pollInterval);_pollInterval=null;}
+    updateSyncCodeDisplay();
+    toast('Sync code removed','\u2705');
+  });
 }
 
 function copySyncCode(){
   const code=getSyncCode();
-  if(!code){toast('Sync not ready yet','⚠️');return;}
+  if(!code){toast('No sync code set','\u26A0\uFE0F');return;}
   if(navigator.clipboard)navigator.clipboard.writeText(code).catch(()=>{});
   const ta=document.createElement('textarea');
   ta.value=code;ta.style.cssText='position:fixed;opacity:0';
   document.body.appendChild(ta);ta.select();document.execCommand('copy');
   document.body.removeChild(ta);
-  toast('Code copied! Share with family 📋','✅');
+  toast('"'+code+'" copied \u2014 share with family!','\u{1F4CB}');
 }
 
-// ── Main sync ─────────────────────────────────────────
 function isLiveContext(){
   const h=window.location.hostname;
-  return h&&h!==''&&h!=='localhost'&&!h.includes('claude.ai');
+  return h&&h!==''&&!h.includes('claude.ai');
 }
 
 async function syncNow(pull=true){
   if(!isLiveContext())return;
-  const binId=getBinId();
-  if(!binId){updateSyncStatus('⚠️ Sync not set up yet','var(--amber)');return;}
-  if(!navigator.onLine){updateSyncStatus('⚠️ No internet','var(--amber)');return;}
-  updateSyncStatus(pull?'↓ Pulling...':'↑ Pushing...','var(--teal)');
+  const code=getSyncCode();
+  if(!code){updateSyncStatus('Set a sync code first','var(--muted)');return;}
+  if(!navigator.onLine){updateSyncStatus('\u26A0\uFE0F No internet','var(--amber)');return;}
+  updateSyncStatus(pull?'\u2193 Pulling...':'\u2191 Pushing...','var(--teal)');
   if(pull){
-    const data=await readBin(binId);
+    const data=await readBin(code);
     if(data?.shared){
       applySharedData(data.shared);
       reRenderAll();
       const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
       localStorage.setItem('oyekan_last_pull',t);
-      updateSyncStatus('✅ Synced · '+t,'var(--green)');
+      updateSyncStatus('\u2705 Synced \u00B7 '+t,'var(--green)');
     }else{
-      updateSyncStatus('⚠️ Could not reach server','var(--amber)');
+      updateSyncStatus('\u26A0\uFE0F Could not reach server \u2014 try again','var(--amber)');
     }
   }else{
-    const ok=await writeBin(binId,getSharedData());
+    const ok=await writeBin(code,getSharedData());
     const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-    updateSyncStatus(ok?'✅ Pushed · '+t:'⚠️ Push failed','var(--green)');
-    if(ok)toast('Family data saved ☁️','✅');
+    updateSyncStatus(ok?'\u2705 Pushed \u00B7 '+t:'\u26A0\uFE0F Push failed','var(--amber)');
+    if(ok)toast('Family data saved to cloud','\u2705');
   }
 }
 
-// ── Join with a code ──────────────────────────────────
-async function joinSyncCode(){
-  const raw=(document.getElementById('sync-code-input')?.value||'').trim().toUpperCase();
-  if(!raw){toast('Enter a sync code','⚠️');return;}
-  if(!navigator.onLine){toast('No internet connection','⚠️');return;}
-  if(!isLiveContext()){toast('Open the GitHub link to use sync','⚠️');return;}
-  updateSyncStatus('🔍 Looking up family...','var(--teal)');
-  // Code format: WORD-NNNN-PANTRYID
-  const parts=raw.split('-');
-  if(parts.length<3){
-    updateSyncStatus('⚠️ Invalid code — ask family for the full code','var(--red)');
-    return;
-  }
-  const pantryId=parts.slice(2).join('-');
-  const shortCode=parts.slice(0,2).join('-');
-  const data=await readBin(pantryId);
-  if(data?.shared){
-    localStorage.setItem('oyekan_bin_id',pantryId);
-    localStorage.setItem('oyekan_sync_code',shortCode+'-'+pantryId);
-    applySharedData(data.shared);
-    reRenderAll();
-    updateSyncCodeDisplay();
-    const inp=document.getElementById('sync-code-input');
-    if(inp)inp.value='';
-    updateSyncStatus('✅ Joined! Family data loaded','var(--green)');
-    toast('Joined family sync! 🔗','✅');
-    startSyncPolling();
-  }else{
-    updateSyncStatus('⚠️ Code not found — check and try again','var(--red)');
-  }
-}
-
-// ── Auto-poll every 30s ───────────────────────────────
 let _pollInterval=null;
 function startSyncPolling(){
   if(_pollInterval)clearInterval(_pollInterval);
   _pollInterval=setInterval(()=>{
-    if(getBinId()&&navigator.onLine&&isLiveContext())syncNow(true);
+    if(getSyncCode()&&navigator.onLine&&isLiveContext())syncNow(true);
   },30000);
 }
 
-// ── Auto-push 4s after save ───────────────────────────
 let _syncPushTimer=null;
 function scheduleSyncPush(){
   if(!isLiveContext())return;
   if(_syncPushTimer)clearTimeout(_syncPushTimer);
   _syncPushTimer=setTimeout(()=>{
-    const binId=getBinId();
-    if(binId&&navigator.onLine)writeBin(binId,getSharedData());
+    const code=getSyncCode();
+    if(code&&navigator.onLine)writeBin(code,getSharedData());
   },4000);
 }
 
-// ── Re-render everything ──────────────────────────────
 function reRenderAll(){
   renderSchedule();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();
   renderWeekly();renderDashboard();renderCal();
@@ -3798,40 +3783,21 @@ function reRenderAll(){
   renderShopping();renderChores();renderNotes();
 }
 
-// ── Boot init ─────────────────────────────────────────
 async function initSync(){
   updateSyncCodeDisplay();
   updateApiKeyStatus();
   if(!isLiveContext()){
-    updateSyncStatus('ℹ️ Open the GitHub link to enable sync','var(--muted)');
+    updateSyncStatus('\u2139\uFE0F Open the GitHub link to enable sync','var(--muted)');
     return;
   }
   if(!navigator.onLine){
-    updateSyncStatus('⚠️ Offline — sync will start when connected','var(--amber)');
+    updateSyncStatus('\u26A0\uFE0F Offline \u2014 will sync when connected','var(--amber)');
     return;
   }
-  const existingId=getBinId();
-  if(existingId){
-    await syncNow(true);
-    startSyncPolling();
-    return;
-  }
-  // First time — create a new Pantry
-  updateSyncStatus('⚙️ Creating family sync...','var(--teal)');
-  const pantryId=await createBin(getSharedData());
-  if(pantryId){
-    const shortCode=generateSyncCode();
-    const fullCode=shortCode+'-'+pantryId;
-    localStorage.setItem('oyekan_bin_id',pantryId);
-    localStorage.setItem('oyekan_sync_code',fullCode);
-    updateSyncCodeDisplay();
-    updateSyncStatus('✅ Sync ready! Share your code with family','var(--green)');
-    toast('Family sync created! ✅','🔗');
-    startSyncPolling();
-  }else{
-    updateSyncStatus('⚠️ Could not create sync — check connection & reload','var(--red)');
-  }
+  const code=getSyncCode();
+  if(code){await syncNow(true);startSyncPolling();}
 }
+
 function autoResetChores(){
   const todayStr=today.toISOString().split('T')[0];
   if(localStorage.getItem('oyekan_chore_reset')===todayStr)return;
