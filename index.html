@@ -393,6 +393,30 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <div class="sec-title">Today's Plan <span class="sec-badge" id="sched-badge" style="background:var(--purple3)">0</span></div>
     <div id="auto-feed"></div>
 
+    <!-- THIS WEEK'S PLAN -->
+    <div class="t-divider"></div>
+    <div class="t-manual-lbl">📅 This Week's Plan <span class="sec-badge" id="weekplan-badge" style="background:var(--teal);color:#fff;font-size:10px;padding:2px 7px;border-radius:99px;margin-left:4px;vertical-align:middle">0</span></div>
+    <div id="weekplan-list"></div>
+    <div id="weekplan-form" class="add-form" style="display:none">
+      <label>Day</label>
+      <select id="wp-day" style="width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--border2);background:var(--glass);font-size:14px;color:var(--text);outline:none;font-family:'Outfit',sans-serif;margin-bottom:8px">
+        <option value="Mon">Monday</option>
+        <option value="Tue">Tuesday</option>
+        <option value="Wed">Wednesday</option>
+        <option value="Thu">Thursday</option>
+        <option value="Fri">Friday</option>
+        <option value="Sat">Saturday</option>
+        <option value="Sun">Sunday</option>
+      </select>
+      <label>Time (optional)</label><input id="wp-time" type="text" placeholder="e.g. 7:00 PM">
+      <label>Activity</label><input id="wp-task" type="text" placeholder="e.g. Football practice, Date night...">
+      <div class="row-btns">
+        <button class="btn-x" onclick="hf('weekplan')">Cancel</button>
+        <button class="btn-ok" style="background:var(--teal)" onclick="addWeekPlan()">Save ✓</button>
+      </div>
+    </div>
+    <button class="add-btn" id="weekplan-addbtn" onclick="sf('weekplan')" style="background:rgba(77,189,170,.1);color:var(--teal);border-color:rgba(77,189,170,.25)">+ Add to This Week</button>
+
     <!-- YOUR TASKS -->
     <div class="t-divider"></div>
     <div class="t-manual-lbl">Your Tasks</div>
@@ -634,11 +658,24 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
     <div class="sec-title">Miscellaneous</div>
     <div id="misc-list"></div>
     <div id="misc-form" class="add-form" style="display:none">
-      <label>What did you spend on?</label><input id="mx-name" type="text" placeholder="e.g. Takeaway, Trainers, Night out">
+      <label>What is it?</label><input id="mx-name" type="text" placeholder="e.g. Takeaway, Trainers, Night out">
       <label>Description (optional)</label><input id="mx-desc" type="text" placeholder="e.g. Treat for the kids">
       <label>Amount (£)</label><input id="mx-amount" type="number" placeholder="0.00">
-      <label>Paid from</label>
+      <label>Type</label>
       <div class="row-btns" style="margin-bottom:9px">
+        <button class="tog on" id="mx-tb-exp" style="background:var(--misc)" onclick="selMiscType('expense')">📤 Expense</button>
+        <button class="tog" id="mx-tb-inc" onclick="selMiscType('income')">📈 Income</button>
+      </div>
+      <label>Frequency</label>
+      <div class="row-btns" style="margin-bottom:9px;flex-wrap:wrap;gap:6px">
+        <button class="tog on" id="mx-freq-once" style="background:var(--misc)" onclick="selMiscFreq('once')">One-off</button>
+        <button class="tog" id="mx-freq-daily" onclick="selMiscFreq('daily')">Daily</button>
+        <button class="tog" id="mx-freq-weekly" onclick="selMiscFreq('weekly')">Weekly</button>
+        <button class="tog" id="mx-freq-fortnightly" onclick="selMiscFreq('fortnightly')">Fortnightly</button>
+        <button class="tog" id="mx-freq-monthly" onclick="selMiscFreq('monthly')">Monthly</button>
+      </div>
+      <label id="mx-paid-label">Paid from</label>
+      <div class="row-btns" style="margin-bottom:9px" id="mx-paid-row">
         <button class="tog on" id="mx-sal" style="background:var(--green)" onclick="selMiscSrc('salary')">💼 Salary</button>
         <button class="tog" id="mx-sav" onclick="selMiscSrc('savings')">🏦 Savings</button>
       </div>
@@ -1253,6 +1290,7 @@ if(!D.budgets)D.budgets=[];
 if(!D.cal)D.cal=[];
 if(!D.notes)D.notes=[];
 if(!D.recurring)D.recurring=[];
+if(!D.weekPlan)D.weekPlan=[];
 
 function save(){localStorage.setItem('oyekan_v3',JSON.stringify(D));scheduleSyncPush();}
 function fmt(){return today.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
@@ -1269,7 +1307,7 @@ function hubSw(hub){
     document.getElementById('hp-'+h).classList.toggle('on',h===hub);
   });
   activeHub=hub;
-  if(hub==='home'){renderDashboard();renderSchedule();renderWeekly();renderCal();}
+  if(hub==='home'){renderDashboard();renderSchedule();renderWeekPlan();renderWeekly();renderCal();}
   if(hub==='finance'){renderFinances();renderBudgets();renderSavings();renderDebts();renderSubs();renderMisc();renderRecurring();}
   if(hub==='family'){renderGrocery();renderMeals();renderShopping();renderChores();}
   if(hub==='notes')renderNotes();
@@ -1292,11 +1330,18 @@ function sf(tab){const f=document.getElementById(tab+'-form'),b=document.getElem
 function hf(tab){
   const f=document.getElementById(tab+'-form'),b=document.getElementById(tab+'-addbtn');
   if(f)f.style.display='none';if(b)b.style.display='block';
-  ['s-time','s-task','ch-name','ch-who','f-label','f-amount','m-day','m-meal','sh-item','sh-cat','sv-name','sv-desc','sv-amount','sv-target','db-name','db-desc','db-total','db-pay','db-due','sub-name','sub-desc','sub-amount','sub-due','mx-name','mx-desc','mx-amount','cal-title','cal-date','cal-time','cal-note','cal-phone','nt-title','groc-item','groc-qty','bud-limit','bud-custom','rec-label','rec-amount','rec-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['s-time','s-task','wp-time','wp-task','ch-name','ch-who','f-label','f-amount','m-day','m-meal','sh-item','sh-cat','sv-name','sv-desc','sv-amount','sv-target','db-name','db-desc','db-total','db-pay','db-due','sub-name','sub-desc','sub-amount','sub-due','mx-name','mx-desc','mx-amount','cal-title','cal-date','cal-time','cal-note','cal-phone','nt-title','groc-item','groc-qty','bud-limit','bud-custom','rec-label','rec-amount','rec-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const nb=document.getElementById('nt-body');if(nb)nb.value='';
   const crw=document.getElementById('cal-recur-wrap');if(crw)crw.style.display='none';
   const msp=document.getElementById('mx-sav-pick-wrap');if(msp)msp.style.display='none';
   const bcw=document.getElementById('bud-custom-wrap');if(bcw)bcw.style.display='none';
+  // Reset misc type/freq toggles
+  miscType='expense';miscFreq='once';
+  selMiscType('expense');selMiscFreq('once');
+  const mxPaidRow=document.getElementById('mx-paid-row');if(mxPaidRow)mxPaidRow.style.display='flex';
+  const mxPaidLbl=document.getElementById('mx-paid-label');if(mxPaidLbl)mxPaidLbl.style.display='block';
+  // Reset edit state
+  _editingTaskId=null;_editingWeekPlanId=null;
   // Reset recurring field visibility
   const rdw=document.getElementById('rec-dow-wrap');if(rdw)rdw.style.display='none';
   const rmw=document.getElementById('rec-month-wrap');if(rmw)rmw.style.display='none';
@@ -1337,22 +1382,22 @@ function askDelete(label,fn){
   document.getElementById('del-confirm').onclick=()=>{closeMod('del-modal');_delFn&&_delFn();_delFn=null;};
   document.getElementById('del-modal').classList.add('open');
 }
-function delTask(id){const t=D.schedule.find(x=>x.id===id);askDelete(t?t.task:'task',()=>{D.schedule=D.schedule.filter(x=>x.id!==id);save();renderSchedule();renderDashboard();toast('Deleted','🗑️');});}
-function delChore(id){const c=D.chores.find(x=>x.id===id);askDelete(c?c.name:'chore',()=>{D.chores=D.chores.filter(x=>x.id!==id);save();renderChores();renderSchedule();toast('Deleted','🗑️');});}
+function delTask(id){const t=D.schedule.find(x=>x.id===id);askDelete(t?t.task:'task',()=>{D.schedule=D.schedule.filter(x=>x.id!==id);save();renderSchedule();renderWeekPlan();renderDashboard();toast('Deleted','🗑️');});}
+function delChore(id){const c=D.chores.find(x=>x.id===id);askDelete(c?c.name:'chore',()=>{D.chores=D.chores.filter(x=>x.id!==id);save();renderChores();renderSchedule();renderWeekPlan();toast('Deleted','🗑️');});}
 function delFinance(id){const f=D.finances.find(x=>x.id===id);askDelete(f?f.label:'transaction',()=>{D.finances=D.finances.filter(x=>x.id!==id);save();renderFinances();renderBudgets();renderDashboard();toast('Deleted','🗑️');});}
 function delMeal(id){const m=D.meals.find(x=>x.id===id);askDelete(m?m.meal:'meal',()=>{D.meals=D.meals.filter(x=>x.id!==id);save();renderMeals();toast('Deleted','🗑️');});}
 function delShop(id){const s=D.shopping.find(x=>x.id===id);askDelete(s?s.item:'item',()=>{D.shopping=D.shopping.filter(x=>x.id!==id);save();renderShopping();toast('Deleted','🗑️');});}
 function delSaving(id){const s=D.savings.find(x=>x.id===id);askDelete(s?s.name:'saving pot',()=>{D.savings=D.savings.filter(x=>x.id!==id);save();renderSavings();renderDashboard();toast('Deleted','🗑️');});}
 function delDebt(id){const d=D.debts.find(x=>x.id===id);askDelete(d?d.name:'debt',()=>{D.debts=D.debts.filter(x=>x.id!==id);save();renderDebts();renderDashboard();toast('Deleted','🗑️');});}
-function delSub(id){const s=D.subs.find(x=>x.id===id);askDelete(s?s.name:'subscription',()=>{D.subs=D.subs.filter(x=>x.id!==id);save();renderSubs();renderSchedule();renderDashboard();toast('Deleted','🗑️');});}
+function delSub(id){const s=D.subs.find(x=>x.id===id);askDelete(s?s.name:'subscription',()=>{D.subs=D.subs.filter(x=>x.id!==id);save();renderSubs();renderSchedule();renderWeekPlan();renderDashboard();toast('Deleted','🗑️');});}
 function delMisc(id){const m=D.misc.find(x=>x.id===id);askDelete(m?m.name:'item',()=>{D.misc=D.misc.filter(x=>x.id!==id);save();renderMisc();toast('Deleted','🗑️');});}
-function delCal(id){const e=D.cal.find(x=>x.id===id);askDelete(e?e.title:'event',()=>{D.cal=D.cal.filter(x=>x.id!==id);save();renderCal();renderSchedule();toast('Deleted','🗑️');});}
+function delCal(id){const e=D.cal.find(x=>x.id===id);askDelete(e?e.title:'event',()=>{D.cal=D.cal.filter(x=>x.id!==id);save();renderCal();renderSchedule();renderWeekPlan();toast('Deleted','🗑️');});}
 function delNote(id){const n=D.notes.find(x=>x.id===id);askDelete(n?n.title:'note',()=>{D.notes=D.notes.filter(x=>x.id!==id);save();renderNotes();toast('Deleted','🗑️');});}
 function delGrocery(id){const g=D.grocery.find(x=>x.id===id);askDelete(g?g.item:'item',()=>{D.grocery=D.grocery.filter(x=>x.id!==id);save();renderGrocery();toast('Deleted','🗑️');});}
 function delBudget(id){const b=D.budgets.find(x=>x.id===id);askDelete(b?b.cat+' budget':'budget',()=>{D.budgets=D.budgets.filter(x=>x.id!==id);save();renderBudgets();toast('Deleted','🗑️');});}
 
 // ACTIONS
-function toggleTask(id){D.schedule=D.schedule.map(t=>t.id===id?{...t,done:!t.done}:t);save();renderSchedule();updateProg();}
+function toggleTask(id){D.schedule=D.schedule.map(t=>t.id===id?{...t,done:!t.done}:t);save();renderSchedule();renderWeekPlan();updateProg();}
 function toggleChore(id){
   const todayStr=today.toISOString().split('T')[0];
   D.chores=D.chores.map(c=>{if(c.id!==id)return c;const dn=!c.done;return{...c,done:dn,lastDone:dn?todayStr:c.lastDone,streak:dn?c.streak+1:Math.max(0,c.streak-1)};});
@@ -1363,9 +1408,112 @@ function toggleGrocery(id){D.grocery=D.grocery.map(g=>g.id===id?{...g,done:!g.do
 
 function markAllTasksDone(){
   D.schedule=D.schedule.map(t=>({...t,done:true}));
-  save();renderSchedule();toast('All tasks done! 🙌','✅');
+  save();renderSchedule();renderWeekPlan();toast('All tasks done! 🙌','✅');
 }
-function addSchedule(){const ti=v('s-time'),ta=v('s-task');if(!ta)return;D.schedule.push({id:Date.now(),time:ti,task:ta,done:false});save();hf('schedule');renderSchedule();renderDashboard();}
+function addSchedule(){
+  const ti=v('s-time'),ta=v('s-task');if(!ta)return;
+  if(_editingTaskId){
+    D.schedule=D.schedule.map(t=>t.id===_editingTaskId?{...t,time:ti,task:ta}:t);
+    _editingTaskId=null;
+    toast('Task updated','✏️');
+  }else{
+    D.schedule.push({id:Date.now(),time:ti,task:ta,done:false});
+  }
+  save();hf('schedule');renderSchedule();renderWeekPlan();renderDashboard();
+}
+
+// ── WEEK PLAN ─────────────────────────────────────────
+function addWeekPlan(){
+  const day=document.getElementById('wp-day')?.value||'Mon';
+  const time=v('wp-time');
+  const task=v('wp-task');
+  if(!task)return;
+  if(!D.weekPlan)D.weekPlan=[];
+  if(_editingWeekPlanId){
+    D.weekPlan=D.weekPlan.map(w=>w.id===_editingWeekPlanId?{...w,day,time,task}:w);
+    _editingWeekPlanId=null;
+    toast('Plan updated','✏️');
+  }else{
+    D.weekPlan.push({id:Date.now(),day,time,task,done:false});
+    toast(task+' added to '+day,'📅');
+  }
+  save();hf('weekplan');renderWeekPlan();
+}
+function toggleWeekPlan(id){
+  D.weekPlan=D.weekPlan.map(w=>w.id===id?{...w,done:!w.done}:w);
+  save();renderWeekPlan();
+}
+function delWeekPlan(id){
+  const w=D.weekPlan.find(x=>x.id===id);
+  askDelete(w?w.task:'item',()=>{
+    D.weekPlan=D.weekPlan.filter(x=>x.id!==id);
+    save();renderWeekPlan();toast('Deleted','🗑️');
+  });
+}
+
+// Edit existing week plan entry — opens the form pre-filled
+let _editingWeekPlanId=null;
+function editWeekPlan(id){
+  const w=D.weekPlan.find(x=>x.id===id);
+  if(!w)return;
+  _editingWeekPlanId=id;
+  sf('weekplan');
+  const day=document.getElementById('wp-day');if(day)day.value=w.day||'Mon';
+  const t=document.getElementById('wp-time');if(t)t.value=w.time||'';
+  const task=document.getElementById('wp-task');if(task)task.value=w.task||'';
+}
+
+// Edit a today's task
+let _editingTaskId=null;
+function editTask(id){
+  const t=D.schedule.find(x=>x.id===id);
+  if(!t)return;
+  _editingTaskId=id;
+  sf('schedule');
+  const tm=document.getElementById('s-time');if(tm)tm.value=t.time||'';
+  const ta=document.getElementById('s-task');if(ta)ta.value=t.task||'';
+}
+function renderWeekPlan(){
+  if(!D.weekPlan)D.weekPlan=[];
+  const el=document.getElementById('weekplan-list');
+  const badge=document.getElementById('weekplan-badge');
+  if(!el)return;
+
+  // Get auto-feed warnings (coming up payments, subs, events within 7 days)
+  const items=buildAutoFeed();
+  const warnings=items.filter(i=>i.urgency==='warning');
+
+  const manualCount=D.weekPlan.length;
+  const totalCount=manualCount+warnings.length;
+  if(badge)badge.textContent=totalCount;
+
+  let html='';
+
+  // Auto-populated warnings (payments, subs, calendar events coming up)
+  if(warnings.length){
+    html+='<div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:2px;text-transform:uppercase;margin:4px 0 6px">⏰ Auto-tracked</div>';
+    html+=warnings.map(renderAutoCard).join('');
+  }
+
+  // Manual entries, grouped by day
+  if(manualCount){
+    const dayOrder=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const dayNames={Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday',Sun:'Sunday'};
+    const byDay={};
+    D.weekPlan.forEach(w=>{if(!byDay[w.day])byDay[w.day]=[];byDay[w.day].push(w);});
+    dayOrder.forEach(d=>{
+      if(!byDay[d])return;
+      html+=`<div style="font-size:10px;font-weight:700;color:var(--teal);letter-spacing:2px;text-transform:uppercase;margin:10px 0 6px">${dayNames[d]}</div>`;
+      html+=byDay[d].map(w=>`<div class="card ${w.done?'faded':''}" onclick="toggleWeekPlan(${w.id})"><div class="cb ${w.done?'on':''}" style="${w.done?'background:var(--teal)':'border-color:var(--teal)'}"><span class="ck">✓</span></div><div class="card-body"><div class="card-title ${w.done?'cross':''}">${w.task}</div>${w.time?`<div class="card-sub">🕐 ${w.time}</div>`:''}</div><button onclick="event.stopPropagation();editWeekPlan(${w.id})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 6px;margin-right:2px">✏️</button><button onclick="event.stopPropagation();delWeekPlan(${w.id})" class="bin-btn">🗑️</button></div>`).join('');
+    });
+  }
+
+  if(!totalCount){
+    html='<div style="color:var(--muted);font-size:13px;text-align:center;padding:10px">Nothing planned this week yet</div>';
+  }
+
+  el.innerHTML=html;
+}
 function addChore(){const n=v('ch-name'),w=v('ch-who'),f=document.getElementById('ch-freq').value;if(!n)return;D.chores.push({id:Date.now(),name:n,who:w||'Everyone',freq:f,streak:0,done:false});save();hf('chores');renderChores();}
 function addFinance(){
   const l=v('f-label'),a=pf('f-amount'),cat=document.getElementById('f-cat').value;
@@ -1463,19 +1611,82 @@ function renewSub(id){
 function confirmRenew(){
   if(!pendingRenewId)return;
   D.subs=D.subs.map(x=>{if(x.id!==pendingRenewId)return x;const dt=x.due?new Date(x.due):new Date();if(x.freq==='Weekly')dt.setDate(dt.getDate()+7);else if(x.freq==='Monthly')dt.setMonth(dt.getMonth()+1);else dt.setFullYear(dt.getFullYear()+1);return{...x,due:dt.toISOString().split('T')[0]};});
-  pendingRenewId=null;save();closeMod('renew-modal');renderSubs();renderSchedule();renderDashboard();toast('Billing date updated','🔄');
+  pendingRenewId=null;save();closeMod('renew-modal');renderSubs();renderSchedule();renderWeekPlan();renderDashboard();toast('Billing date updated','🔄');
 }
+let miscType='expense', miscFreq='once';
+
+function selMiscType(t){
+  miscType=t;
+  T2('mx-tb-exp','mx-tb-inc',t==='expense','var(--misc)','var(--green)');
+  // Show/hide paid-from row — only for expenses
+  const row=document.getElementById('mx-paid-row');
+  const lbl=document.getElementById('mx-paid-label');
+  const show=t==='expense';
+  if(row)row.style.display=show?'flex':'none';
+  if(lbl)lbl.style.display=show?'block':'none';
+}
+
+function selMiscFreq(f){
+  miscFreq=f;
+  ['once','daily','weekly','fortnightly','monthly'].forEach(x=>{
+    const btn=document.getElementById('mx-freq-'+x);
+    if(btn){
+      const on=x===f;
+      btn.classList.toggle('on',on);
+      btn.style.background=on?'var(--misc)':'transparent';
+    }
+  });
+}
+
 function addMisc(){
   const n=v('mx-name'),desc=v('mx-desc'),a=pf('mx-amount');if(!n||!a)return;
+  const freqLabel={once:'One-off',daily:'Daily',weekly:'Weekly',fortnightly:'Fortnightly',monthly:'Monthly'};
+  const freq=miscFreq;
+  const type=miscType;
+
+  // For expenses, handle paid-from source
   let spId=null;
-  if(miscSrc==='savings'){
-    spId=parseInt(document.getElementById('mx-sav-pick').value);
-    const pot=D.savings.find(s=>s.id===spId);
-    if(pot){if(a>pot.saved){toast('Not enough in that pot','⚠️');return;}
-      D.savings=D.savings.map(s=>s.id===spId?{...s,saved:s.saved-a,history:[...(s.history||[]),{type:'remove',amount:a,source:'misc',date:fmt()}]}:s);}
-  }else{D.finances.unshift({id:Date.now(),label:'Misc: '+n,amount:a,type:'expense',date:fmt(),cat:'Other'});}
-  D.misc.unshift({id:Date.now(),name:n,desc,amount:a,source:miscSrc,savingPotId:spId,date:fmt()});
-  save();hf('misc');renderMisc();renderFinances();renderSavings();renderDashboard();toast(n+' logged','🎲');
+  if(type==='expense'){
+    if(miscSrc==='savings'){
+      spId=parseInt(document.getElementById('mx-sav-pick').value);
+      const pot=D.savings.find(s=>s.id===spId);
+      if(pot){
+        if(a>pot.saved){toast('Not enough in that pot','⚠️');return;}
+        D.savings=D.savings.map(s=>s.id===spId?{...s,saved:s.saved-a,history:[...(s.history||[]),{type:'remove',amount:a,source:'misc',date:fmt()}]}:s);
+      }
+    }
+  }
+
+  // Build finance transaction label with frequency
+  const freqSuffix=freq!=='once'?' ('+freqLabel[freq]+')':'';
+  const finLabel=(type==='expense'?'Misc: ':'Income: ')+n+freqSuffix;
+
+  // Add to finances
+  D.finances.unshift({
+    id:Date.now(),
+    label:finLabel,
+    amount:a,
+    type:type,
+    date:fmt(),
+    cat:'Other',
+    isoDate:today.toISOString().split('T')[0]
+  });
+
+  // Add to misc log
+  D.misc.unshift({
+    id:Date.now()+1,
+    name:n,
+    desc,
+    amount:a,
+    type:type,
+    freq:freq,
+    source:type==='expense'?miscSrc:'income',
+    savingPotId:spId,
+    date:fmt()
+  });
+
+  save();hf('misc');renderMisc();renderFinances();renderSavings();renderDashboard();
+  toast(n+' logged'+(freq!=='once'?' · '+freqLabel[freq]:''),'🎲');
 }
 
 // GROCERY
@@ -1731,12 +1942,12 @@ function addCalEvent(){
     D.cal=D.cal.map(e=>e.id===_editingCalId?{...e,title,date,time,type,recur,remind,note,phone}:e);
     _editingCalId=null;
     const btn=document.getElementById('cal-save-btn');if(btn)btn.textContent='Save ✓';
-    save();hf('cal');renderCal();renderSchedule();renderDashboard();toast(title+' updated','✏️');
+    save();hf('cal');renderCal();renderSchedule();renderWeekPlan();renderDashboard();toast(title+' updated','✏️');
     return;
   }
 
   D.cal.push({id:Date.now(),title,date,time,type,recur,remind,note,phone});
-  save();hf('cal');renderCal();renderSchedule();renderDashboard();toast(title+' added','🗓️');
+  save();hf('cal');renderCal();renderSchedule();renderWeekPlan();renderDashboard();toast(title+' added','🗓️');
 }
 function buildEvMap(){
   const m={};
@@ -1776,19 +1987,19 @@ function openNoteMoveModal(id){
 // AUTO FEED
 function buildAutoFeed(){
   const now=new Date();now.setHours(0,0,0,0);const items=[];
-  (D.chores||[]).forEach(c=>{if(c.done)return;if(c.freq==='Daily'||c.freq==='Weekly')items.push({urgency:'chore',icon:'🧹',title:c.name,sub:'👤 '+c.who+' · '+c.freq,badge:c.freq,bCls:'b-chore'});});
+  (D.chores||[]).forEach(c=>{if(c.done)return;if(c.freq==='Daily'||c.freq==='Weekly')items.push({urgency:'chore',icon:'🧹',title:c.name,sub:'👤 '+c.who+' · '+c.freq,badge:c.freq,bCls:'b-chore',srcType:'chore',srcId:c.id});});
   (D.debts||[]).forEach(d=>{
     if(d.paid>=d.total||!d.due)return;
     const due=new Date(d.due);due.setHours(0,0,0,0);const diff=Math.round((due-now)/864e5),rem=Math.max(0,d.total-d.paid);
-    if(diff<0)items.push({urgency:'urgent',icon:'⚠️',title:'OVERDUE: '+d.name,sub:'£'+rem.toLocaleString('en-GB'),badge:'Overdue',bCls:'b-urgent',act:'Pay Now',fn:'openDebtPay('+d.id+')'});
-    else if(diff===0)items.push({urgency:'urgent',icon:'💳',title:'Pay today: '+d.name,sub:'£'+d.payment+' due TODAY',badge:'Today',bCls:'b-urgent',act:'Pay',fn:'openDebtPay('+d.id+')'});
-    else if(diff<=3)items.push({urgency:'warning',icon:'💳',title:'Coming up: '+d.name,sub:'£'+d.payment+' in '+diff+'d',badge:diff+'d',bCls:'b-warn',act:'Pay Early',fn:'openDebtPay('+d.id+')'});
+    if(diff<0)items.push({urgency:'urgent',icon:'⚠️',title:'OVERDUE: '+d.name,sub:'£'+rem.toLocaleString('en-GB'),badge:'Overdue',bCls:'b-urgent',act:'Pay Now',fn:'openDebtPay('+d.id+')',srcType:'debt',srcId:d.id});
+    else if(diff===0)items.push({urgency:'urgent',icon:'💳',title:'Pay today: '+d.name,sub:'£'+d.payment+' due TODAY',badge:'Today',bCls:'b-urgent',act:'Pay',fn:'openDebtPay('+d.id+')',srcType:'debt',srcId:d.id});
+    else if(diff<=3)items.push({urgency:'warning',icon:'💳',title:'Coming up: '+d.name,sub:'£'+d.payment+' in '+diff+'d',badge:diff+'d',bCls:'b-warn',act:'Pay Early',fn:'openDebtPay('+d.id+')',srcType:'debt',srcId:d.id});
   });
   (D.subs||[]).filter(s=>!s.paused).forEach(s=>{
     if(!s.due)return;const due=new Date(s.due);due.setHours(0,0,0,0);const diff=Math.round((due-now)/864e5);
-    if(diff<0)items.push({urgency:'urgent',icon:'⚠️',title:'Overdue: '+s.name,sub:'£'+s.amount.toFixed(2),badge:'Overdue',bCls:'b-urgent',act:'Renew',fn:'renewSub('+s.id+')'});
-    else if(diff===0)items.push({urgency:'urgent',icon:'📲',title:'Billing today: '+s.name,sub:'£'+s.amount.toFixed(2),badge:'Today',bCls:'b-urgent',act:'Renew',fn:'renewSub('+s.id+')'});
-    else if(diff<=3)items.push({urgency:'warning',icon:'📲',title:'Billing soon: '+s.name,sub:'£'+s.amount.toFixed(2)+' in '+diff+'d',badge:diff+'d',bCls:'b-warn'});
+    if(diff<0)items.push({urgency:'urgent',icon:'⚠️',title:'Overdue: '+s.name,sub:'£'+s.amount.toFixed(2),badge:'Overdue',bCls:'b-urgent',act:'Renew',fn:'renewSub('+s.id+')',srcType:'sub',srcId:s.id});
+    else if(diff===0)items.push({urgency:'urgent',icon:'📲',title:'Billing today: '+s.name,sub:'£'+s.amount.toFixed(2),badge:'Today',bCls:'b-urgent',act:'Renew',fn:'renewSub('+s.id+')',srcType:'sub',srcId:s.id});
+    else if(diff<=3)items.push({urgency:'warning',icon:'📲',title:'Billing soon: '+s.name,sub:'£'+s.amount.toFixed(2)+' in '+diff+'d',badge:diff+'d',bCls:'b-warn',srcType:'sub',srcId:s.id});
   });
   const nowStr=now.toISOString().split('T')[0];
   (D.cal||[]).forEach(e=>{
@@ -1796,8 +2007,8 @@ function buildAutoFeed(){
     const remDt=new Date(evDt.getTime()-(e.remind||0)*864e5);
     if(remDt.toISOString().split('T')[0]<=nowStr&&nowStr<=e.date){
       const diff=Math.round((evDt-now)/864e5);
-      if(diff===0)items.push({urgency:'urgent',icon:CAL_EM[e.type]||'📌',title:e.title,sub:'Today'+(e.time?' · '+e.time:''),badge:'Today',bCls:'b-urgent'});
-      else if(diff>0)items.push({urgency:'warning',icon:CAL_EM[e.type]||'📌',title:e.title,sub:'In '+diff+'d · '+evDt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}),badge:diff+'d',bCls:'b-warn'});
+      if(diff===0)items.push({urgency:'urgent',icon:CAL_EM[e.type]||'📌',title:e.title,sub:'Today'+(e.time?' · '+e.time:''),badge:'Today',bCls:'b-urgent',srcType:'cal',srcId:e.id});
+      else if(diff>0)items.push({urgency:'warning',icon:CAL_EM[e.type]||'📌',title:e.title,sub:'In '+diff+'d · '+evDt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}),badge:diff+'d',bCls:'b-warn',srcType:'cal',srcId:e.id});
     }
   });
   const ord={urgent:0,warning:1,chore:2};
@@ -1806,8 +2017,52 @@ function buildAutoFeed(){
 function renderAutoCard(item){
   const bg=item.urgency==='urgent'?'rgba(224,84,112,.14)':item.urgency==='warning'?'rgba(232,168,66,.12)':'rgba(155,111,212,.12)';
   const col=item.urgency==='urgent'?'var(--red)':item.urgency==='warning'?'var(--amber)':'var(--purple2)';
-  const btn=item.act?`<button class="auto-act" style="background:${bg};color:${col}" onclick="${item.fn}">${item.act}</button>`:'';
-  return`<div class="auto-card ${item.urgency}"><div class="auto-icon">${item.icon}</div><div class="auto-body"><div class="auto-title">${item.title}</div><div class="auto-sub">${item.sub}</div><span class="auto-badge ${item.bCls}">${item.badge}</span></div>${btn}</div>`;
+  const actBtn=item.act?`<button class="auto-act" style="background:${bg};color:${col}" onclick="${item.fn}">${item.act}</button>`:'';
+  // Edit + delete buttons for auto items - routes to source section
+  const editBtn=item.srcType?`<button onclick="editAutoItem('${item.srcType}',${item.srcId})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 6px" title="Edit">✏️</button>`:'';
+  const delBtn=item.srcType?`<button onclick="delAutoItem('${item.srcType}',${item.srcId})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 6px" title="Remove">🗑️</button>`:'';
+  return`<div class="auto-card ${item.urgency}"><div class="auto-icon">${item.icon}</div><div class="auto-body"><div class="auto-title">${item.title}</div><div class="auto-sub">${item.sub}</div><span class="auto-badge ${item.bCls}">${item.badge}</span></div><div style="display:flex;align-items:center;gap:2px">${actBtn}${editBtn}${delBtn}</div></div>`;
+}
+
+// Route edit/delete of auto-feed items back to their source section
+function editAutoItem(type,id){
+  if(type==='debt'){
+    const d=D.debts.find(x=>x.id===id);if(!d)return;
+    hubSw('finance');subSw('finance','debts');
+    setTimeout(()=>{sf('debts');
+      ['db-name','db-desc','db-total','db-pay','db-due'].forEach(f=>{const el=document.getElementById(f);if(el)el.value='';});
+      document.getElementById('db-name').value=d.name;
+      document.getElementById('db-desc').value=d.desc||'';
+      document.getElementById('db-total').value=d.total;
+      document.getElementById('db-pay').value=d.payment;
+      document.getElementById('db-due').value=d.due;
+      toast('Editing '+d.name+' — update and save','✏️');
+    },100);
+  }else if(type==='sub'){
+    const s=D.subs.find(x=>x.id===id);if(!s)return;
+    hubSw('finance');subSw('finance','subs');
+    setTimeout(()=>{sf('subs');
+      ['sub-name','sub-desc','sub-amount','sub-due'].forEach(f=>{const el=document.getElementById(f);if(el)el.value='';});
+      document.getElementById('sub-name').value=s.name;
+      document.getElementById('sub-desc').value=s.desc||'';
+      document.getElementById('sub-amount').value=s.amount;
+      document.getElementById('sub-due').value=s.due;
+      toast('Editing '+s.name+' — update and save','✏️');
+    },100);
+  }else if(type==='cal'){
+    hubSw('home');subSw('home','cal');
+    setTimeout(()=>{editCalEvent(id);},100);
+  }else if(type==='chore'){
+    hubSw('family');subSw('family','chores');
+    toast('Edit in Chores section','✏️');
+  }
+}
+
+function delAutoItem(type,id){
+  if(type==='debt')delDebt(id);
+  else if(type==='sub')delSub(id);
+  else if(type==='cal')delCal(id);
+  else if(type==='chore')delChore(id);
 }
 function updateProg(){
   const mn=D.schedule.length,md=D.schedule.filter(t=>t.done).length,ac=buildAutoFeed().length,tot=mn+ac;
@@ -2018,21 +2273,21 @@ function renderWeekly(){
 
 // ALL RENDER FUNCTIONS
 function renderSchedule(){
-  const items=buildAutoFeed();const ae=document.getElementById('auto-feed');
-  if(!items.length){ae.innerHTML='<div class="all-clear">✅ All clear — nothing urgent today!</div>';}
-  else{
-    const urgent=items.filter(i=>i.urgency==='urgent'),warn=items.filter(i=>i.urgency==='warning'),chores=items.filter(i=>i.urgency==='chore');
-    let h='';
-    if(urgent.length)h+=`<div class="auto-lbl">🚨 Needs Attention</div>`+urgent.map(renderAutoCard).join('');
-    if(warn.length)h+=`<div class="auto-lbl">⏰ Coming Up</div>`+warn.map(renderAutoCard).join('');
-    ae.innerHTML=h;
+  const items=buildAutoFeed();
+  const ae=document.getElementById('auto-feed');
+  // Today's Plan only shows URGENT (today/overdue) items — warnings move to This Week's Plan
+  const urgent=items.filter(i=>i.urgency==='urgent');
+  if(!urgent.length){
+    ae.innerHTML='<div class="all-clear">✅ All clear — nothing urgent today!</div>';
+  }else{
+    ae.innerHTML=`<div class="auto-lbl">🚨 Needs Attention</div>`+urgent.map(renderAutoCard).join('');
   }
   const el=document.getElementById('schedule-list');
   const undone=D.schedule.filter(t=>!t.done).length;
   const markAllBtn=D.schedule.length&&undone>0?`<button onclick="markAllTasksDone()" style="width:100%;padding:9px;border-radius:11px;background:rgba(123,79,168,.1);border:1px solid rgba(123,79,168,.2);color:var(--purple2);font-size:12px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;margin-bottom:8px">✅ Mark all ${undone} task${undone!==1?'s':''} done</button>`:'';
   el.innerHTML=(D.schedule.length?markAllBtn:'')+(
     !D.schedule.length?'<div style="color:var(--muted);font-size:13px;text-align:center;padding:10px">No tasks yet</div>':
-    D.schedule.map(t=>`<div class="card ${t.done?'faded':''}" onclick="toggleTask(${t.id})"><div class="cb ${t.done?'on':''}" style="${t.done?'background:var(--purple3)':'border-color:var(--purple)'}"><span class="ck">✓</span></div><div class="card-body"><div class="card-title ${t.done?'cross':''}">${t.task}</div>${t.time?`<div class="card-sub">🕐 ${t.time}</div>`:''}</div><button onclick="event.stopPropagation();delTask(${t.id})" class="bin-btn">🗑️</button></div>`).join('')
+    D.schedule.map(t=>`<div class="card ${t.done?'faded':''}" onclick="toggleTask(${t.id})"><div class="cb ${t.done?'on':''}" style="${t.done?'background:var(--purple3)':'border-color:var(--purple)'}"><span class="ck">✓</span></div><div class="card-body"><div class="card-title ${t.done?'cross':''}">${t.task}</div>${t.time?`<div class="card-sub">🕐 ${t.time}</div>`:''}</div><button onclick="event.stopPropagation();editTask(${t.id})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 6px;margin-right:2px">✏️</button><button onclick="event.stopPropagation();delTask(${t.id})" class="bin-btn">🗑️</button></div>`).join('')
   );
   updateProg();
   renderTodayNeedList();
@@ -2123,14 +2378,32 @@ const MCi=['🎮','🍕','👟','🎬','🎁','☕','🛒','🎲'];
 function renderMisc(){
   if(!D.misc)D.misc=[];
   const tot=D.misc.reduce((s,m)=>s+m.amount,0);
-  const salT=D.misc.filter(m=>m.source==='salary').reduce((s,m)=>s+m.amount,0);
-  const savT=D.misc.filter(m=>m.source==='savings').reduce((s,m)=>s+m.amount,0);
-  document.getElementById('misc-summary').innerHTML=`<div class="sum-bar" style="background:linear-gradient(135deg,rgba(92,32,16,.3),rgba(224,120,72,.12));border-color:rgba(224,120,72,.18)"><div class="sum-label">Total Misc</div><div class="sum-val" style="color:var(--misc)">£${tot.toFixed(2)}</div><div class="sum-sub">${D.misc.length} item${D.misc.length!==1?'s':''} logged</div><div class="sum-grid"><div class="sum-mini"><div class="sum-mini-label">From Salary</div><div class="sum-mini-val" style="color:var(--green)">£${salT.toFixed(2)}</div></div><div class="sum-mini"><div class="sum-mini-label">From Savings</div><div class="sum-mini-val" style="color:var(--purple2)">£${savT.toFixed(2)}</div></div></div></div>`;
+  const expT=D.misc.filter(m=>m.type==='income'?false:true).reduce((s,m)=>s+m.amount,0);
+  const incT=D.misc.filter(m=>m.type==='income').reduce((s,m)=>s+m.amount,0);
+  document.getElementById('misc-summary').innerHTML=`<div class="sum-bar" style="background:linear-gradient(135deg,rgba(92,32,16,.3),rgba(224,120,72,.12));border-color:rgba(224,120,72,.18)"><div class="sum-label">Misc Total</div><div class="sum-val" style="color:var(--misc)">£${tot.toFixed(2)}</div><div class="sum-sub">${D.misc.length} item${D.misc.length!==1?'s':''} logged</div><div class="sum-grid"><div class="sum-mini"><div class="sum-mini-label">Expenses</div><div class="sum-mini-val" style="color:var(--red)">£${expT.toFixed(2)}</div></div><div class="sum-mini"><div class="sum-mini-label">Income</div><div class="sum-mini-val" style="color:var(--green)">£${incT.toFixed(2)}</div></div></div></div>`;
   const el=document.getElementById('misc-list');
-  if(!D.misc.length){el.innerHTML='<div class="empty"><div class="empty-icon">🎲</div>No misc spends yet</div>';return;}
+  if(!D.misc.length){el.innerHTML='<div class="empty"><div class="empty-icon">🎲</div>No misc items yet</div>';return;}
+  const freqLabel={once:'One-off',daily:'Daily',weekly:'Weekly',fortnightly:'Fortnightly',monthly:'Monthly'};
   el.innerHTML=D.misc.map((m,i)=>{
     const pot=m.savingPotId?D.savings.find(s=>s.id===m.savingPotId):null;
-    return`<div class="misc-card"><div class="misc-icon">${MCi[i%8]}</div><div class="misc-body"><div class="misc-name">${m.name}</div>${m.desc?`<div class="misc-desc">${m.desc}</div>`:''}<span class="misc-src ${m.source==='salary'?'ms-sal':'ms-sav'}">${m.source==='salary'?'💼 Salary':'🏦 '+(pot?pot.name:'Savings')}</span></div><div class="misc-right"><div class="misc-amt">£${m.amount.toFixed(2)}</div><div class="misc-date">${m.date}</div><button onclick="delMisc(${m.id})" class="bin-btn" style="margin-top:5px">🗑️</button></div></div>`;
+    const isIncome=m.type==='income';
+    const freq=m.freq||'once';
+    const freqBadge=freq!=='once'?`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:rgba(155,111,212,.15);color:var(--purple2);border:1px solid rgba(155,111,212,.2);margin-left:4px">${freqLabel[freq]}</span>`:'';
+    return`<div class="misc-card">
+      <div class="misc-icon">${MCi[i%8]}</div>
+      <div class="misc-body">
+        <div class="misc-name">${m.name}${freqBadge}</div>
+        ${m.desc?`<div class="misc-desc">${m.desc}</div>`:''}
+        <span class="misc-src ${isIncome?'ms-sal':'ms-sav'}" style="${isIncome?'background:rgba(76,175,130,.12);color:var(--green)':''}">
+          ${isIncome?'📈 Income':m.source==='savings'?'🏦 '+(pot?pot.name:'Savings'):'💼 Salary'}
+        </span>
+      </div>
+      <div class="misc-right">
+        <div class="misc-amt" style="color:${isIncome?'var(--green)':'var(--misc)'}">£${m.amount.toFixed(2)}</div>
+        <div class="misc-date">${m.date}</div>
+        <button onclick="delMisc(${m.id})" class="bin-btn" style="margin-top:5px">🗑️</button>
+      </div>
+    </div>`;
   }).join('');
 }
 function noteQuickCal(id){
@@ -2391,7 +2664,8 @@ function importData(e){
         shopping:imp.shopping||[],savings:imp.savings||[],
         debts:imp.debts||[],subs:imp.subs||[],misc:imp.misc||[],
         cal:imp.cal||[],notes:imp.notes||[],grocery:imp.grocery||[],
-        budgets:imp.budgets||[],recurring:imp.recurring||[]
+        budgets:imp.budgets||[],recurring:imp.recurring||[],
+        weekPlan:imp.weekPlan||[]
       };
       // Migrate missing fields from older exports
       D.finances=D.finances.map(f=>({...f,cat:f.cat||''}));
@@ -2402,7 +2676,7 @@ function importData(e){
       D.subs=D.subs.map(s=>({...s,paused:s.paused||false}));
       save();
       // Re-render everything
-      renderSchedule();renderTodayNeedList();renderTodayChores();
+      renderSchedule();renderWeekPlan();renderTodayNeedList();renderTodayChores();
       renderWeeklyPayments();renderWeekly();renderDashboard();renderCal();
       renderFinances();renderBudgets();renderSavings();renderDebts();
       renderSubs();renderMisc();renderRecurring();
@@ -2527,7 +2801,7 @@ function confirmScannedEvent(){
   if(!title){toast('Please add a title','⚠️');return;}
   if(!date){toast('Please set the date','⚠️');return;}
   D.cal.push({id:Date.now(),title,date,time,type:'appointment',recur:null,remind:3,note,phone});
-  save();closeMod('scan-modal');renderCal();renderSchedule();renderDashboard();
+  save();closeMod('scan-modal');renderCal();renderSchedule();renderWeekPlan();renderDashboard();
   toast(title+' added to calendar','🗓️');
 }
 
@@ -2982,12 +3256,12 @@ function switchProfile(id){
 function reloadDataForProfile(){
   const raw=localStorage.getItem('oyekan_v3');
   const loaded=raw?JSON.parse(raw):null;
-  const blank={schedule:[],chores:[],finances:[],meals:[],shopping:[],savings:[],debts:[],subs:[],misc:[],cal:[],notes:[],grocery:[],budgets:[],recurring:[]};
+  const blank={schedule:[],chores:[],finances:[],meals:[],shopping:[],savings:[],debts:[],subs:[],misc:[],cal:[],notes:[],grocery:[],budgets:[],recurring:[],weekPlan:[]};
   Object.assign(D, loaded||blank);
   // Ensure all keys
-  ['schedule','chores','finances','meals','shopping','savings','debts','subs','misc','cal','notes','grocery','budgets','recurring'].forEach(k=>{if(!D[k])D[k]=[];});
+  ['schedule','chores','finances','meals','shopping','savings','debts','subs','misc','cal','notes','grocery','budgets','recurring','weekPlan'].forEach(k=>{if(!D[k])D[k]=[];});
   // Re-render everything
-  renderSchedule();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();renderWeekly();renderDashboard();renderCal();
+  renderSchedule();renderWeekPlan();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();renderWeekly();renderDashboard();renderCal();
   renderFinances();renderBudgets();renderSavings();renderDebts();renderSubs();renderMisc();renderRecurring();
   renderGrocery();renderMeals();renderShopping();renderChores();renderNotes();
 }
@@ -3587,7 +3861,7 @@ function wakeUp(){
 const PANTRY_BASE = 'https://getpantry.cloud/apiv1/pantry';
 const PANTRY_ID   = '9694a610-8dfb-4a16-a922-ee937313e4b7';
 
-const SHARED_KEYS   = ['cal','grocery','meals','chores','finances','budgets','savings','debts','subs','misc','recurring'];
+const SHARED_KEYS   = ['cal','grocery','meals','chores','finances','budgets','savings','debts','subs','misc','recurring','weekPlan'];
 const PERSONAL_KEYS = ['schedule','notes','shopping'];
 
 function getSyncCode(){ return localStorage.getItem('oyekan_sync_code')||''; }
@@ -3776,7 +4050,7 @@ function scheduleSyncPush(){
 }
 
 function reRenderAll(){
-  renderSchedule();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();
+  renderSchedule();renderWeekPlan();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();
   renderWeekly();renderDashboard();renderCal();
   renderFinances();renderBudgets();renderSavings();renderDebts();renderSubs();
   renderMisc();renderRecurring();renderGrocery();renderMeals();
@@ -3836,7 +4110,7 @@ if(sessionStorage.getItem('oyekan_awake')==='1'){
 } else {
   initWakeScreen();
 }
-renderSchedule();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();renderWeekly();renderDashboard();renderCal();
+renderSchedule();renderWeekPlan();renderTodayNeedList();renderTodayChores();renderWeeklyPayments();renderWeekly();renderDashboard();renderCal();
 renderFinances();renderBudgets();renderSavings();renderDebts();renderSubs();renderMisc();
 renderGrocery();renderMeals();renderShopping();renderChores();renderNotes();renderRecurring();
 </script>
