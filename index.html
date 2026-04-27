@@ -529,6 +529,8 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <label>Category (for budget tracking)</label>
       <select id="f-cat">
         <option value="">— No category —</option>
+        <option value="Work">💼 Work</option>
+        <option value="Benefits">🏛️ Benefits</option>
         <option value="Groceries">🛒 Groceries</option>
         <option value="Eating Out">🍽️ Eating Out</option>
         <option value="Transport">🚗 Transport</option>
@@ -543,9 +545,25 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
         <button class="tog on" id="tb-exp" style="background:var(--purple3)" onclick="selFin('expense')">📤 Expense</button>
         <button class="tog" id="tb-inc" onclick="selFin('income')">📈 Income</button>
       </div>
+      <label>Start date</label>
+      <input id="f-date" type="date" style="width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--border2);background:var(--glass);font-size:14px;color:var(--text);outline:none;font-family:'Outfit',sans-serif;margin-bottom:9px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="f-recur-on" onchange="toggleFinRecur()" style="width:18px;height:18px;accent-color:var(--purple2);cursor:pointer">
+        <span style="color:var(--text);font-size:13px">🔁 Make this recurring (auto-repeat)</span>
+      </label>
+      <div id="f-recur-wrap" style="display:none;padding:10px 12px;background:rgba(155,111,212,.06);border:1px solid rgba(155,111,212,.18);border-radius:11px;margin-bottom:10px">
+        <label style="font-size:11px;color:var(--muted)">Frequency</label>
+        <div class="row-btns" style="flex-wrap:wrap;gap:6px;margin-top:4px">
+          <button class="tog on" id="ff-daily" style="background:var(--purple)" onclick="selFinFreq('daily')">Daily</button>
+          <button class="tog" id="ff-weekly" onclick="selFinFreq('weekly')">Weekly</button>
+          <button class="tog" id="ff-fortnightly" onclick="selFinFreq('fortnightly')">Fortnightly</button>
+          <button class="tog" id="ff-monthly" onclick="selFinFreq('monthly')">Monthly</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">Will auto-charge on the start date and repeat at the chosen frequency. Manage in the Recurring tab.</div>
+      </div>
       <div class="row-btns">
         <button class="btn-x" onclick="hf('finances')">Cancel</button>
-        <button class="btn-ok" style="background:var(--purple)" onclick="addFinance()">Save ✓</button>
+        <button class="btn-ok" id="f-save-btn" style="background:var(--purple)" onclick="addFinance()">Save ✓</button>
       </div>
     </div>
     <button class="add-btn" id="finances-addbtn" onclick="sf('finances')">+ Add Transaction</button>
@@ -1326,11 +1344,19 @@ function subSw(hub,sub){
     hf(fkey);
   });
 }
-function sf(tab){const f=document.getElementById(tab+'-form'),b=document.getElementById(tab+'-addbtn');if(f)f.style.display='block';if(b)b.style.display='none';}
+function sf(tab){
+  const f=document.getElementById(tab+'-form'),b=document.getElementById(tab+'-addbtn');
+  if(f)f.style.display='block';if(b)b.style.display='none';
+  // Pre-fill finance date with today if empty
+  if(tab==='finances'){
+    const fd=document.getElementById('f-date');
+    if(fd&&!fd.value)fd.value=today.toISOString().split('T')[0];
+  }
+}
 function hf(tab){
   const f=document.getElementById(tab+'-form'),b=document.getElementById(tab+'-addbtn');
   if(f)f.style.display='none';if(b)b.style.display='block';
-  ['s-time','s-task','wp-time','wp-task','ch-name','ch-who','f-label','f-amount','m-day','m-meal','sh-item','sh-cat','sv-name','sv-desc','sv-amount','sv-target','db-name','db-desc','db-total','db-pay','db-due','sub-name','sub-desc','sub-amount','sub-due','mx-name','mx-desc','mx-amount','cal-title','cal-date','cal-time','cal-note','cal-phone','nt-title','groc-item','groc-qty','bud-limit','bud-custom','rec-label','rec-amount','rec-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['s-time','s-task','wp-time','wp-task','ch-name','ch-who','f-label','f-amount','f-date','m-day','m-meal','sh-item','sh-cat','sv-name','sv-desc','sv-amount','sv-target','db-name','db-desc','db-total','db-pay','db-due','sub-name','sub-desc','sub-amount','sub-due','mx-name','mx-desc','mx-amount','cal-title','cal-date','cal-time','cal-note','cal-phone','nt-title','groc-item','groc-qty','bud-limit','bud-custom','rec-label','rec-amount','rec-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const nb=document.getElementById('nt-body');if(nb)nb.value='';
   const crw=document.getElementById('cal-recur-wrap');if(crw)crw.style.display='none';
   const msp=document.getElementById('mx-sav-pick-wrap');if(msp)msp.style.display='none';
@@ -1341,7 +1367,12 @@ function hf(tab){
   const mxPaidRow=document.getElementById('mx-paid-row');if(mxPaidRow)mxPaidRow.style.display='flex';
   const mxPaidLbl=document.getElementById('mx-paid-label');if(mxPaidLbl)mxPaidLbl.style.display='block';
   // Reset edit state
-  _editingTaskId=null;_editingWeekPlanId=null;
+  _editingTaskId=null;_editingWeekPlanId=null;_editingFinId=null;
+  // Reset finance recurring toggle
+  const fr=document.getElementById('f-recur-on');if(fr){fr.checked=false;fr.disabled=false;}
+  const frw=document.getElementById('f-recur-wrap');if(frw)frw.style.display='none';
+  const fSaveBtn=document.getElementById('f-save-btn');if(fSaveBtn)fSaveBtn.textContent='Save ✓';
+  finFreq='monthly';selFinFreq('monthly');
   // Reset recurring field visibility
   const rdw=document.getElementById('rec-dow-wrap');if(rdw)rdw.style.display='none';
   const rmw=document.getElementById('rec-month-wrap');if(rmw)rmw.style.display='none';
@@ -1515,13 +1546,95 @@ function renderWeekPlan(){
   el.innerHTML=html;
 }
 function addChore(){const n=v('ch-name'),w=v('ch-who'),f=document.getElementById('ch-freq').value;if(!n)return;D.chores.push({id:Date.now(),name:n,who:w||'Everyone',freq:f,streak:0,done:false});save();hf('chores');renderChores();}
+// Finance form state
+let finFreq='monthly', _editingFinId=null;
+
+function toggleFinRecur(){
+  const cb=document.getElementById('f-recur-on');
+  const wrap=document.getElementById('f-recur-wrap');
+  if(wrap)wrap.style.display=cb?.checked?'block':'none';
+}
+
+function selFinFreq(f){
+  finFreq=f;
+  ['daily','weekly','fortnightly','monthly'].forEach(x=>{
+    const btn=document.getElementById('ff-'+x);
+    if(btn){
+      const on=x===f;
+      btn.classList.toggle('on',on);
+      btn.style.background=on?'var(--purple)':'transparent';
+    }
+  });
+}
+
+function editFinance(id){
+  const f=D.finances.find(x=>x.id===id);if(!f)return;
+  _editingFinId=id;
+  sf('finances');
+  document.getElementById('f-label').value=f.label||'';
+  document.getElementById('f-amount').value=f.amount||'';
+  document.getElementById('f-cat').value=f.cat||'';
+  document.getElementById('f-date').value=f.isoDate||today.toISOString().split('T')[0];
+  selFin(f.type||'expense');
+  // Recurring not editable here - they get a recurring entry
+  const rcb=document.getElementById('f-recur-on');if(rcb){rcb.checked=false;rcb.disabled=true;}
+  toggleFinRecur();
+  const btn=document.getElementById('f-save-btn');if(btn)btn.textContent='Update ✓';
+}
+
 function addFinance(){
   const l=v('f-label'),a=pf('f-amount'),cat=document.getElementById('f-cat').value;
   if(!l||!a)return;
-  // Fix 14: nudge if expense has no category
+  const dateInput=document.getElementById('f-date')?.value||today.toISOString().split('T')[0];
+  const recurOn=document.getElementById('f-recur-on')?.checked||false;
+
+  // Edit mode
+  if(_editingFinId){
+    D.finances=D.finances.map(f=>{
+      if(f.id!==_editingFinId)return f;
+      const dt=new Date(dateInput);
+      const dispDate=dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      return {...f,label:l,amount:a,type:finType,cat,isoDate:dateInput,date:dispDate};
+    });
+    _editingFinId=null;
+    const btn=document.getElementById('f-save-btn');if(btn)btn.textContent='Save ✓';
+    save();hf('finances');renderFinances();renderBudgets();renderDashboard();
+    toast(l+' updated','✏️');
+    return;
+  }
+
+  // Nudge if expense has no category
   if(finType==='expense'&&!cat)toast('Tip: add a category to track budgets 🎯','💡');
-  D.finances.unshift({id:Date.now(),label:l,amount:a,type:finType,date:fmt(),cat,isoDate:today.toISOString().split('T')[0]});
-  save();hf('finances');renderFinances();renderBudgets();renderDashboard();
+
+  // Create the transaction
+  const dt=new Date(dateInput);
+  const dispDate=dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  D.finances.unshift({id:Date.now(),label:l,amount:a,type:finType,date:dispDate,cat,isoDate:dateInput});
+
+  // If recurring, also create a Recurring entry
+  if(recurOn){
+    if(!D.recurring)D.recurring=[];
+    const recObj={
+      id:Date.now()+1,
+      label:l,
+      amount:a,
+      type:finType,
+      cat,
+      freq:finFreq,
+      startDate:dateInput,
+      lastRun:dateInput
+    };
+    // Frequency-specific fields
+    if(finFreq==='weekly'||finFreq==='fortnightly'){
+      recObj.dayOfWeek=dt.getDay(); // 0=Sun
+    } else if(finFreq==='monthly'){
+      recObj.dayOfMonth=dt.getDate();
+    }
+    D.recurring.unshift(recObj);
+    toast('Recurring '+finFreq+' transaction created 🔁','✅');
+  }
+
+  save();hf('finances');renderFinances();renderBudgets();renderDashboard();renderRecurring();
 }
 function addMeal(){const d=v('m-day'),m=v('m-meal');if(!d||!m)return;D.meals.push({id:Date.now(),day:d,meal:m});save();hf('meals');renderMeals();}
 function addShopping(){const i=v('sh-item'),c=v('sh-cat')||'General';if(!i)return;D.shopping.push({id:Date.now(),item:i,category:c,checked:false});save();hf('shopping');renderShopping();}
@@ -2307,7 +2420,7 @@ function renderFinances(){
   const inc=D.finances.filter(f=>f.type==='income').reduce((s,f)=>s+f.amount,0);
   const exp=D.finances.filter(f=>f.type==='expense').reduce((s,f)=>s+f.amount,0);const bal=inc-exp;
   document.getElementById('stat-grid').innerHTML=`<div class="stat-card"><div class="stat-label">Income</div><div class="stat-val" style="color:var(--green)">£${inc.toLocaleString('en-GB')}</div></div><div class="stat-card"><div class="stat-label">Spent</div><div class="stat-val" style="color:var(--red)">£${exp.toLocaleString('en-GB')}</div></div><div class="stat-card wide"><div class="stat-label">Balance</div><div class="stat-val" style="color:${bal>=0?'var(--blue)':'var(--red)'}">£${bal.toLocaleString('en-GB')}</div><div class="stat-trend">${bal>=0?'✅ On track':'⚠️ Over budget'}</div></div>`;
-  document.getElementById('finance-list').innerHTML=D.finances.map(f=>`<div class="card"><div class="icon-box" style="background:${f.type==='income'?'rgba(76,175,130,.12)':'rgba(224,84,112,.1)'}">${f.type==='income'?'📈':'📤'}</div><div class="card-body"><div class="card-title">${f.label}</div><div class="card-sub">${f.date}${f.cat?' · '+f.cat:''}</div></div><div style="font-size:14px;font-weight:700;color:${f.type==='income'?'var(--green)':'var(--red)'};font-family:'Cormorant Garamond',serif;white-space:nowrap;flex-shrink:0">${f.type==='income'?'+':'-'}£${f.amount.toLocaleString('en-GB')}</div><button onclick="delFinance(${f.id})" class="bin-btn">🗑️</button></div>`).join('');
+  document.getElementById('finance-list').innerHTML=D.finances.map(f=>`<div class="card"><div class="icon-box" style="background:${f.type==='income'?'rgba(76,175,130,.12)':'rgba(224,84,112,.1)'}">${f.type==='income'?'📈':'📤'}</div><div class="card-body"><div class="card-title">${f.label}</div><div class="card-sub">${f.date}${f.cat?' · '+f.cat:''}</div></div><div style="font-size:14px;font-weight:700;color:${f.type==='income'?'var(--green)':'var(--red)'};font-family:'Cormorant Garamond',serif;white-space:nowrap;flex-shrink:0">${f.type==='income'?'+':'-'}£${f.amount.toLocaleString('en-GB')}</div><button onclick="editFinance(${f.id})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 6px" title="Edit">✏️</button><button onclick="delFinance(${f.id})" class="bin-btn">🗑️</button></div>`).join('');
 }
 const MB=['rgba(155,111,212,.1)','rgba(76,175,130,.1)','rgba(91,155,213,.09)','rgba(232,168,66,.09)','rgba(224,84,112,.09)','rgba(77,189,170,.09)','rgba(224,120,72,.09)'];
 const ME=['🍝','🍗','🌮','🐟','🍕','🔥','🥩'];
